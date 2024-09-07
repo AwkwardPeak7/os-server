@@ -1,8 +1,8 @@
-build:
+build: clean
 	@mkdir build
-	gcc -O3 server.c -o build/server
+	gcc -O3 -lcjson server.c -o build/server
 
-run: build
+run:
 	@build/server
 
 clean:

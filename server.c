@@ -1,9 +1,26 @@
+#include <stdio.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <cjson/cJSON.h>
 
-#include<stdio.h>
-#include<string.h>
-#include<sys/socket.h>
-#include<arpa/inet.h>
-#include<unistd.h>
+#define CHUNK_SIZE 1024 
+
+void receiveFile(const char* filename, int filesize, int socketfd) {
+	FILE *file = fopen(filename, "wb");
+
+	int sofar = 0;
+	char buffer[CHUNK_SIZE];
+
+	while (sofar < filesize) {
+		int n = recv(socketfd, buffer, CHUNK_SIZE, 0);
+		sofar+=n;
+
+		fwrite(buffer, 1, n, file);
+	}
+	fclose(file);
+}
 
 int main() {
 	char client_message[2000];
@@ -42,14 +59,29 @@ int main() {
 	
     int read_size;
 	while( (read_size = recv(client_sock , client_message , 2000 , 0)) > 0 ) {
-        int res = strcmp(client_message, "hi");
-        if (res == 0) {
-            char str[] = "hello";
-            write(client_sock, str, sizeof(str));
-        } else {
-            char str[] = "Mazak Na kar mere naal";
-            write(client_sock, str, sizeof(str));
-        }
+		puts(client_message);
+		cJSON* json = cJSON_Parse(client_message);
+
+		const char* command = cJSON_GetObjectItem(json, "command")->valuestring;
+
+		if (strcmp(command, "UPLOAD") == 0) {
+			const char* filename = cJSON_GetObjectItem(json, "filename")->valuestring;
+			int filesize = cJSON_GetObjectItem(json, "filesize")->valueint;
+
+			char success[] = "{\"success\": true}";
+			write(client_sock, success, sizeof(success));
+
+			receiveFile(filename, filesize, client_sock);
+
+		} else if (strcmp(command, "download") == 0) {
+
+		} else if (strcmp(command, "view") == 0) {
+
+		} else if (strcmp(command, "exit") == 0) {
+			close(client_sock);
+			//TODO: don't exit server here
+			return 0;
+		}
 
         // buffer clear
         memset(client_message, '\0', sizeof(client_message));
