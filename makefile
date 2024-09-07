@@ -1,6 +1,6 @@
 build: clean
 	@mkdir build
-	gcc -O3 -lcjson server.c -o build/server
+	gcc -O3 server.c -o build/server -lcjson
 
 run:
 	@build/server
