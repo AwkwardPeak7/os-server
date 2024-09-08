@@ -131,7 +131,7 @@ int main() {
 		if (strcmp(command, "UPLOAD") == 0) {
 			const char* filename = cJSON_GetObjectItem(json, "filename")->valuestring;
 			int filesize = cJSON_GetObjectItem(json, "filesize")->valueint;
-
+			// TODO: file size check for failure
 			char success[] = "{\"success\": true}";
 			write(client_sock, success, sizeof(success));
 
@@ -158,6 +158,7 @@ int main() {
         // buffer clear
         memset(client_message, '\0', sizeof(client_message));
         read_size = 0;
+		cJSON_Delete(json);
 	}
 	
 	if(read_size == 0) {
