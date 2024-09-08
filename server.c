@@ -5,7 +5,7 @@
 #include <unistd.h>
 #include <cjson/cJSON.h>
 
-#define CHUNK_SIZE 1024 
+#define CHUNK_SIZE 128 
 
 void receiveFile(const char* filename, int filesize, int socketfd) {
 	FILE *file = fopen(filename, "wb");
