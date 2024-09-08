@@ -4,11 +4,16 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <cjson/cJSON.h>
+#include <sys/stat.h>
 
 #define CHUNK_SIZE 128 
 
 void receiveFile(const char* filename, int filesize, int socketfd) {
-	FILE *file = fopen(filename, "wb");
+	char path[1024] = "files/";
+	mkdir(path, S_IRWXU | S_IRWXG);
+	strcat(path, filename);
+
+	FILE *file = fopen(path, "wb");
 
 	int sofar = 0;
 	char buffer[CHUNK_SIZE];
@@ -73,11 +78,11 @@ int main() {
 
 			receiveFile(filename, filesize, client_sock);
 
-		} else if (strcmp(command, "download") == 0) {
+		} else if (strcmp(command, "DOWNLOAD") == 0) {
 
-		} else if (strcmp(command, "view") == 0) {
+		} else if (strcmp(command, "VIEW") == 0) {
 
-		} else if (strcmp(command, "exit") == 0) {
+		} else if (strcmp(command, "EXIT") == 0) {
 			close(client_sock);
 			//TODO: don't exit server here
 			return 0;
