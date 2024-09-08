@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <cjson/cJSON.h>
 #include <sys/stat.h>
+#include <dirent.h>
 
 #define CHUNK_SIZE 128 
 
@@ -25,6 +26,38 @@ void receiveFile(const char* filename, int filesize, int socketfd) {
 		fwrite(buffer, 1, n, file);
 	}
 	fclose(file);
+}
+
+void sendFileList(int socketfd) {
+	DIR* dir = opendir("files");
+	if (dir == NULL) {
+		perror("couldn't open directory: files");
+		char resp[] = "[]";
+		write(socketfd, resp, sizeof(resp));
+		return;
+	}
+
+	cJSON* json = cJSON_CreateArray();
+
+	struct dirent *entry;
+	struct stat st;
+	while ((entry = readdir(dir)) != NULL) {
+        // Skip the current and parent directories
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+            continue;
+        }
+
+        // Use stat to get file type information
+        if (stat(entry->d_name, &st) == 0 && S_ISDIR(st.st_mode)) {
+			continue;
+		}
+		cJSON_AddItemToArray(json, cJSON_CreateString(entry->d_name));
+    }
+	closedir(dir);
+
+	const char* resp = cJSON_Print(json);
+	write(socketfd, resp, strlen(resp));
+	cJSON_Delete(json);
 }
 
 int main() {
@@ -81,7 +114,7 @@ int main() {
 		} else if (strcmp(command, "DOWNLOAD") == 0) {
 
 		} else if (strcmp(command, "VIEW") == 0) {
-
+			sendFileList(client_sock);
 		} else if (strcmp(command, "EXIT") == 0) {
 			close(client_sock);
 			//TODO: don't exit server here
