@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <string.h>
+#include <stdbool.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <unistd.h>
@@ -8,6 +9,31 @@
 #include <dirent.h>
 
 #define CHUNK_SIZE 128 
+
+bool fileExists(const char* filename) {
+	char path[1024] = "files/";
+	strcat(path, filename);
+
+	return access(path, F_OK) == 0;
+}
+
+void sendFile(const char *filename, int socketfd) {
+	char path[1024] = "files/";
+	strcat(path, filename);
+
+    FILE *file = fopen(path, "rb");
+
+    char buffer[CHUNK_SIZE];
+    size_t bytes_read;
+    while ((bytes_read = fread(buffer, 1, CHUNK_SIZE, file)) > 0) {
+        if (send(socketfd, buffer, bytes_read, 0) == -1) {
+            perror("Error sending file data");
+            fclose(file);
+        }
+    }
+
+    fclose(file);
+}
 
 void receiveFile(const char* filename, int filesize, int socketfd) {
 	char path[1024] = "files/";
@@ -112,7 +138,15 @@ int main() {
 			receiveFile(filename, filesize, client_sock);
 
 		} else if (strcmp(command, "DOWNLOAD") == 0) {
-
+			const char* filename = cJSON_GetObjectItem(json, "filename")->valuestring;
+			if (fileExists(filename)) {
+				char success[] = "{\"success\": true}";
+				write(client_sock, success, sizeof(success));
+				sendFile(filename, client_sock);
+			} else {
+				char success[] = "{\"success\": false}";
+				write(client_sock, success, sizeof(success));
+			}
 		} else if (strcmp(command, "VIEW") == 0) {
 			sendFileList(client_sock);
 		} else if (strcmp(command, "EXIT") == 0) {
