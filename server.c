@@ -23,15 +23,11 @@ bool fileExists(const char* filename) {
 int getFileSize(const char* filename) {
 	char path[1024] = "files/";
 	strcat(path, filename);
-    FILE *file = fopen(path, "rb");
 
-    fseek(file, 0, SEEK_END);
-    int file_size = ftell(file);
-    fseek(file, 0, SEEK_SET);  
+	struct stat st;
+	stat(path, &st);
 
-	fclose(file);
-
-	return file_size;
+	return st.st_size;
 }
 
 void sendFileSize(const char *filename, int socketfd) {
@@ -44,8 +40,6 @@ void sendFileSize(const char *filename, int socketfd) {
 	cJSON_Delete(json);
 
 	write(socketfd, resp, strlen(resp));
-
-	free(resp);
 }
 
 void sendFile(const char *filename, int socketfd) {
