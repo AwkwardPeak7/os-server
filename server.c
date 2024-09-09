@@ -20,7 +20,7 @@ bool fileExists(const char* filename) {
 	return access(path, F_OK) == 0;
 }
 
-int getFileSize(const char* filename) {
+long int getFileSize(const char* filename) {
 	char path[1024] = "files/";
 	strcat(path, filename);
 
