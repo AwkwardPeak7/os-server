@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
 #include <sys/socket.h>
@@ -6,7 +7,9 @@
 #include <unistd.h>
 #include <cjson/cJSON.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <dirent.h>
+#include <time.h>
 
 #define CHUNK_SIZE 128 
 
@@ -105,7 +108,13 @@ void sendFileList(int socketfd) {
         if (stat(entry->d_name, &st) == 0 && S_ISDIR(st.st_mode)) {
 			continue;
 		}
-		cJSON_AddItemToArray(json, cJSON_CreateString(entry->d_name));
+
+		cJSON* item = cJSON_CreateObject();
+		cJSON_AddStringToObject(item, "filename", entry->d_name);
+		cJSON_AddNumberToObject(item, "size", st.st_size);
+		cJSON_AddNumberToObject(item, "timestamp", st.st_mtime);
+
+		cJSON_AddItemToArray(json, item);
     }
 	closedir(dir);
 
