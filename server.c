@@ -17,6 +17,34 @@ bool fileExists(const char* filename) {
 	return access(path, F_OK) == 0;
 }
 
+int getFileSize(const char* filename) {
+	char path[1024] = "files/";
+	strcat(path, filename);
+    FILE *file = fopen(path, "rb");
+
+    fseek(file, 0, SEEK_END);
+    int file_size = ftell(file);
+    fseek(file, 0, SEEK_SET);  
+
+	fclose(file);
+
+	return file_size;
+}
+
+void sendFileSize(const char *filename, int socketfd) {
+	int size = getFileSize(filename);
+
+	cJSON* json = cJSON_CreateObject();
+	cJSON_AddNumberToObject(json, "filesize", size);
+	const char* resp = cJSON_Print(json);
+
+	cJSON_Delete(json);
+
+	write(socketfd, resp, strlen(resp));
+
+	free(resp);
+}
+
 void sendFile(const char *filename, int socketfd) {
 	char path[1024] = "files/";
 	strcat(path, filename);
@@ -142,6 +170,9 @@ int main() {
 			if (fileExists(filename)) {
 				char success[] = "{\"success\": true}";
 				write(client_sock, success, sizeof(success));
+
+				sendFileSize(filename, client_sock);
+
 				sendFile(filename, client_sock);
 			} else {
 				char success[] = "{\"success\": false}";
