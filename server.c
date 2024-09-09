@@ -193,6 +193,9 @@ int main() {
 			close(client_sock);
 			//TODO: don't exit server here
 			return 0;
+		} else {
+			char success[] = "{\"success\": false}";
+			write(client_sock, success, sizeof(success));
 		}
 
         // buffer clear
