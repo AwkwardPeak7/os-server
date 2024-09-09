@@ -99,14 +99,20 @@ void sendFileList(int socketfd) {
         }
 
         // Use stat to get file type information
-        if (stat(entry->d_name, &st) == 0 && S_ISDIR(st.st_mode)) {
+		char path[1024] = "files/";
+		strcat(path, entry->d_name);
+        if (stat(path, &st) == 0 && S_ISDIR(st.st_mode)) {
 			continue;
 		}
 
 		cJSON* item = cJSON_CreateObject();
 		cJSON_AddStringToObject(item, "filename", entry->d_name);
 		cJSON_AddNumberToObject(item, "size", st.st_size);
-		cJSON_AddNumberToObject(item, "timestamp", st.st_mtime);
+		time_t time = st.st_mtime;
+		if (time == 0) {
+			time = st.st_ctime;
+		}
+		cJSON_AddNumberToObject(item, "timestamp", time);
 
 		cJSON_AddItemToArray(json, item);
     }
