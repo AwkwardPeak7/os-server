@@ -3,7 +3,7 @@ build: clean
 	gcc -O3 server.c -o build/server -lcjson
 
 run:
-	@build/server
+	build/server
 
 clean:
 	rm -rf build

@@ -39,7 +39,7 @@ void sendFileSize(const char *filename, int socketfd) {
 
 	cJSON_Delete(json);
 
-	write(socketfd, resp, strlen(resp));
+	send(socketfd, resp, strlen(resp), 0);
 }
 
 void sendFile(const char *filename, int socketfd) {
@@ -84,7 +84,7 @@ void sendFileList(int socketfd) {
 	if (dir == NULL) {
 		perror("couldn't open directory: files");
 		char resp[] = "[]";
-		write(socketfd, resp, sizeof(resp));
+		send(socketfd, resp, sizeof(resp), 0);
 		return;
 	}
 
@@ -119,7 +119,7 @@ void sendFileList(int socketfd) {
 	closedir(dir);
 
 	const char* resp = cJSON_Print(json);
-	write(socketfd, resp, strlen(resp));
+	send(socketfd, resp, strlen(resp), 0);
 	cJSON_Delete(json);
 }
 
@@ -170,7 +170,7 @@ int main() {
 			int filesize = cJSON_GetObjectItem(json, "filesize")->valueint;
 			// TODO: file size check for failure
 			char success[] = "{\"success\": true}";
-			write(client_sock, success, sizeof(success));
+			send(client_sock, success, sizeof(success), 0);
 
 			receiveFile(filename, filesize, client_sock);
 
@@ -178,14 +178,14 @@ int main() {
 			const char* filename = cJSON_GetObjectItem(json, "filename")->valuestring;
 			if (fileExists(filename)) {
 				char success[] = "{\"success\": true}";
-				write(client_sock, success, sizeof(success));
+				send(client_sock, success, sizeof(success), 0);
 
 				sendFileSize(filename, client_sock);
 
 				sendFile(filename, client_sock);
 			} else {
 				char success[] = "{\"success\": false}";
-				write(client_sock, success, sizeof(success));
+				send(client_sock, success, sizeof(success), 0);
 			}
 		} else if (strcmp(command, "VIEW") == 0) {
 			sendFileList(client_sock);
@@ -195,7 +195,7 @@ int main() {
 			return 0;
 		} else {
 			char success[] = "{\"success\": false}";
-			write(client_sock, success, sizeof(success));
+			send(client_sock, success, sizeof(success), 0);
 		}
 
         // buffer clear
