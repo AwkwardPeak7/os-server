@@ -177,10 +177,13 @@ int main() {
 		} else if (strcmp(command, "DOWNLOAD") == 0) {
 			const char* filename = cJSON_GetObjectItem(json, "filename")->valuestring;
 			if (fileExists(filename)) {
-				char success[] = "{\"success\": true}";
-				send(client_sock, success, sizeof(success), 0);
+				cJSON* response = cJSON_CreateObject();
+				cJSON_AddBoolToObject(response, "success", true);
+				cJSON_AddNumberToObject(response, "filesize", getFileSize(filename));
+				const char* success = cJSON_Print(response);
+				cJSON_Delete(response);
 
-				sendFileSize(filename, client_sock);
+				send(client_sock, success, strlen(success), 0);
 
 				sendFile(filename, client_sock);
 			} else {
