@@ -185,7 +185,22 @@ int main() {
 
 				send(client_sock, success, strlen(success), 0);
 
-				sendFile(filename, client_sock);
+				// buffer clear
+				memset(client_message, '\0', sizeof(client_message));
+				read_size = 0;
+
+				read_size = recv(client_sock , client_message , 2000 , 0);
+				puts(client_message);
+				cJSON* json_response = cJSON_Parse(client_message);
+				if (json_response != NULL) {
+					cJSON* success_item = cJSON_GetObjectItem(json_response, "success");
+					if (cJSON_IsBool(success_item) && cJSON_IsTrue(success_item)) {
+						sendFile(filename, client_sock);
+					}
+					cJSON_Delete(json_response);
+				}
+
+				//sendFile(filename, client_sock);
 			} else {
 				char success[] = "{\"success\": false}";
 				send(client_sock, success, sizeof(success), 0);
