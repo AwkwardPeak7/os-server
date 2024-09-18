@@ -11,6 +11,9 @@
 #include <dirent.h>
 #include <time.h>
 
+// #define _GNU_SOURCE // for pthread_tryjoin_np function
+#include <pthread.h>
+
 #define CHUNK_SIZE 128 
 
 bool fileExists(const char* filename) {
@@ -123,45 +126,26 @@ void sendFileList(int socketfd) {
 	cJSON_Delete(json);
 }
 
-int main() {
-	char client_message[2000];
-	
-	int socket_desc = socket(AF_INET , SOCK_STREAM , 0);
-	if (socket_desc == -1) {
-		printf("Could not create socket\n");
-        return 1;
-	}
-	printf("Socket created\n");
-	
-    struct sockaddr_in server;
-	server.sin_family = AF_INET;
-	server.sin_addr.s_addr = INADDR_ANY;
-	server.sin_port = htons(14000);
-	
-	if(bind(socket_desc,(struct sockaddr *)&server , sizeof(server)) < 0) {
-		perror("bind failed. Error");
-		return 1;
-	}
-	puts("bind done");
-	
-	listen(socket_desc , 1);
-	
-	puts("Waiting for incoming connections...");
-	int c = sizeof(struct sockaddr_in);
-	
-    struct sockaddr_in client;
+struct server_args {
+	int client_socket;
+};
 
-	int client_sock = accept(socket_desc, (struct sockaddr *)&client, (socklen_t*)&c);
-	if (client_sock < 0) {
-		perror("accept failed");
-		return 1;
-	}
-	puts("Connection accepted");
-	
-    int read_size;
-	while( (read_size = recv(client_sock , client_message , 2000 , 0)) > 0 ) {
+void* serveClient(void* args) {
+	struct server_args* arg = (struct server_args*) args;
+
+	printf("Connection accepted from %d\n", arg->client_socket);
+
+	char client_message[2000];
+	while(1) {
+		recv(arg->client_socket , client_message , 2000 , 0);
 		puts(client_message);
 		cJSON* json = cJSON_Parse(client_message);
+
+		if (json == NULL) {
+			char success[] = "{\"success\": false}";
+			send(arg->client_socket, success, sizeof(success), 0);
+			continue;
+		}
 
 		const char* command = cJSON_GetObjectItem(json, "command")->valuestring;
 
@@ -170,9 +154,9 @@ int main() {
 			int filesize = cJSON_GetObjectItem(json, "filesize")->valueint;
 			// TODO: file size check for failure
 			char success[] = "{\"success\": true}";
-			send(client_sock, success, sizeof(success), 0);
+			send(arg->client_socket, success, sizeof(success), 0);
 
-			receiveFile(filename, filesize, client_sock);
+			receiveFile(filename, filesize, arg->client_socket);
 
 		} else if (strcmp(command, "DOWNLOAD") == 0) {
 			const char* filename = cJSON_GetObjectItem(json, "filename")->valuestring;
@@ -183,50 +167,109 @@ int main() {
 				const char* success = cJSON_Print(response);
 				cJSON_Delete(response);
 
-				send(client_sock, success, strlen(success), 0);
+				send(arg->client_socket, success, strlen(success), 0);
 
 				// buffer clear
 				memset(client_message, '\0', sizeof(client_message));
-				read_size = 0;
 
-				read_size = recv(client_sock , client_message , 2000 , 0);
+				recv(arg->client_socket , client_message , 2000 , 0);
 				puts(client_message);
 				cJSON* json_response = cJSON_Parse(client_message);
 				if (json_response != NULL) {
 					cJSON* success_item = cJSON_GetObjectItem(json_response, "success");
 					if (cJSON_IsBool(success_item) && cJSON_IsTrue(success_item)) {
-						sendFile(filename, client_sock);
+						sendFile(filename, arg->client_socket);
 					}
 					cJSON_Delete(json_response);
 				}
 
-				//sendFile(filename, client_sock);
 			} else {
 				char success[] = "{\"success\": false}";
-				send(client_sock, success, sizeof(success), 0);
+				send(arg->client_socket, success, sizeof(success), 0);
 			}
 		} else if (strcmp(command, "VIEW") == 0) {
-			sendFileList(client_sock);
+			sendFileList(arg->client_socket);
 		} else if (strcmp(command, "EXIT") == 0) {
-			close(client_sock);
-			//TODO: don't exit server here
-			return 0;
+			//close(arg->client_socket);
+			printf("EXIT called: %d",arg->client_socket);
+			close(arg->client_socket);
+
+			return NULL; // exit
 		} else {
 			char success[] = "{\"success\": false}";
-			send(client_sock, success, sizeof(success), 0);
+			send(arg->client_socket, success, sizeof(success), 0);
 		}
 
         // buffer clear
         memset(client_message, '\0', sizeof(client_message));
-        read_size = 0;
 		cJSON_Delete(json);
 	}
+
+	return NULL;
+}
+
+int main() {
+	printf("pid: %d\n", getpid());
 	
-	if(read_size == 0) {
-		puts("Client disconnected");
-		fflush(stdout);
-	} else if(read_size == -1) {
-		perror("recv failed");
+	int server_socket = socket(AF_INET , SOCK_STREAM , 0);
+	if (server_socket == -1) {
+		printf("Could not create server socket\n");
+        return 1;
+	}
+	printf("Server Socket created\n");
+	
+    struct sockaddr_in server;
+	server.sin_family = AF_INET;
+	server.sin_addr.s_addr = INADDR_ANY;
+	server.sin_port = htons(14000);
+	
+	if(bind(server_socket,(struct sockaddr *)&server , sizeof(server)) < 0) {
+		perror("bind failed. Error");
+		return 1;
+	}
+	puts("bind done");
+	
+	listen(server_socket , 3);
+	
+	int c = sizeof(struct sockaddr_in);
+	
+    struct sockaddr_in client;
+
+	pthread_t thread_ids[3] = {-1, -1, -1};
+	int client_sockets[3] = {-1, -1, -1};
+    struct server_args args[3] = {};
+
+	while (1) {
+		puts("main -- first for");
+		for (int i = 0; i < 3; i++) {
+			if (client_sockets[i] != -1) continue;
+
+			int client_sock = accept(server_socket, (struct sockaddr *)&client, (socklen_t*)&c);
+			if (client_sock < 0) {
+				perror("accept failed");
+				continue;
+			}
+
+			client_sockets[i] = client_sock;
+			args[i].client_socket = client_sock;
+
+			pthread_create(&thread_ids[i], NULL, serveClient, (void*)&args[i]);
+		}
+
+		puts("main -- second for");
+		for (int i = 0; i < 3; i++) {
+            if (thread_ids[i] != -1) {
+                int res = pthread_tryjoin_np(thread_ids[i], NULL);
+                if (res == 0) {
+					//printf("thread %d terminated", thread_ids[i]);
+                    client_sockets[i] = -1;
+                    thread_ids[i] = -1;
+                }
+            }
+        }
+
+		usleep(100000); // 100ms
+		
 	}
 	
 	return 0;
