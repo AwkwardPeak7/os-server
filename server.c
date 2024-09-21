@@ -16,16 +16,16 @@
 
 #define CHUNK_SIZE 128 
 
-bool fileExists(const char* filename) {
-	char path[1024] = "files/";
-	strcat(path, filename);
+bool fileExists(const char* dataDir, const char* filename) {
+	char path[2048] = {};
+	snprintf(path, 2048, "%s/%s", dataDir, filename);
 
 	return access(path, F_OK) == 0;
 }
 
-long int getFileSize(const char* filename) {
-	char path[1024] = "files/";
-	strcat(path, filename);
+long int getFileSize(const char* dataDir, const char* filename) {
+	char path[2048] = {};
+	snprintf(path, 2048, "%s/%s", dataDir, filename);
 
 	struct stat st;
 	stat(path, &st);
@@ -33,8 +33,8 @@ long int getFileSize(const char* filename) {
 	return st.st_size;
 }
 
-void sendFileSize(const char *filename, int socketfd) {
-	int size = getFileSize(filename);
+void sendFileSize(const char* dataDir, const char *filename, int socketfd) {
+	int size = getFileSize(dataDir, filename);
 
 	cJSON* json = cJSON_CreateObject();
 	cJSON_AddNumberToObject(json, "filesize", size);
@@ -45,9 +45,9 @@ void sendFileSize(const char *filename, int socketfd) {
 	send(socketfd, resp, strlen(resp), 0);
 }
 
-void sendFile(const char *filename, int socketfd) {
-	char path[1024] = "files/";
-	strcat(path, filename);
+void sendFile(const char* dataDir, const char *filename, int socketfd) {
+	char path[2048] = {};
+	snprintf(path, 2048, "%s/%s", dataDir, filename);
 
     FILE *file = fopen(path, "rb");
 
@@ -63,10 +63,9 @@ void sendFile(const char *filename, int socketfd) {
     fclose(file);
 }
 
-void receiveFile(const char* filename, int filesize, int socketfd) {
-	char path[1024] = "files/";
-	mkdir(path, S_IRWXU | S_IRWXG);
-	strcat(path, filename);
+void receiveFile(const char* dataDir, const char* filename, int filesize, int socketfd) {
+	char path[2048] = {};
+	snprintf(path, 2048, "%s/%s", dataDir, filename);
 
 	FILE *file = fopen(path, "wb");
 
@@ -82,8 +81,8 @@ void receiveFile(const char* filename, int filesize, int socketfd) {
 	fclose(file);
 }
 
-void sendFileList(int socketfd) {
-	DIR* dir = opendir("files");
+void sendFileList(const char* dataDir, int socketfd) {
+	DIR* dir = opendir(dataDir);
 	if (dir == NULL) {
 		perror("couldn't open directory: files");
 		char resp[] = "[]";
@@ -102,8 +101,8 @@ void sendFileList(int socketfd) {
         }
 
         // Use stat to get file type information
-		char path[1024] = "files/";
-		strcat(path, entry->d_name);
+		char path[2048] = {}; 
+		snprintf(path, 2048, "%s/%s", dataDir, entry->d_name);
         if (stat(path, &st) == 0 && S_ISDIR(st.st_mode)) {
 			continue;
 		}
@@ -130,10 +129,65 @@ struct server_args {
 	int client_socket;
 };
 
+bool directoryExists(const char* path) {
+	struct stat st;
+	return stat(path, &st) == 0 && S_ISDIR(st.st_mode);
+}
+
+const char* Authenticate(int socketfd, const char* dataDir) {
+	char client_message[2000];
+
+	recv(socketfd , client_message , 2000 , 0);
+	puts(client_message);
+	cJSON* json = cJSON_Parse(client_message);
+
+	if (json == NULL) {
+		char success[] = "{\"success\": false}";
+		send(socketfd, success, sizeof(success), 0);
+		return NULL;
+	}
+
+	const char* command = cJSON_GetObjectItem(json, "command")->valuestring;
+	
+	bool signup = strcmp(command, "SIGNUP") == 0;
+	bool login = strcmp(command, "LOGIN") == 0;
+
+	const char* hash = cJSON_GetObjectItem(json, "hash")->valuestring;
+
+	char* path = (char*)malloc(1024);
+	snprintf(path, 1024, "%s/%s", dataDir, hash);
+
+	bool dirExists = directoryExists(path);
+
+	if (signup && !dirExists) {
+		mkdir(path, S_IRWXU | S_IRWXG);
+		char success[] = "{\"success\": true}";
+		send(socketfd, success, sizeof(success), 0);
+		return path;
+	} else if (login && dirExists) {
+		char success[] = "{\"success\": true}";
+		send(socketfd, success, sizeof(success), 0);
+		return path;
+	} else {
+		char success[] = "{\"success\": false}";
+		send(socketfd, success, sizeof(success), 0);
+	}
+
+	free(path);
+	return NULL;
+}
+
 void* serveClient(void* args) {
 	struct server_args* arg = (struct server_args*) args;
 
 	printf("Connection accepted from %d\n", arg->client_socket);
+
+	// TODO: data dir configuarable
+	const char* userDir = Authenticate(arg->client_socket, "data");	
+	if (userDir == NULL) {
+		close(arg->client_socket);
+		return NULL;
+	}
 
 	char client_message[2000];
 	while(1) {
@@ -156,14 +210,14 @@ void* serveClient(void* args) {
 			char success[] = "{\"success\": true}";
 			send(arg->client_socket, success, sizeof(success), 0);
 
-			receiveFile(filename, filesize, arg->client_socket);
+			receiveFile(userDir, filename, filesize, arg->client_socket);
 
 		} else if (strcmp(command, "DOWNLOAD") == 0) {
 			const char* filename = cJSON_GetObjectItem(json, "filename")->valuestring;
-			if (fileExists(filename)) {
+			if (fileExists(userDir, filename)) {
 				cJSON* response = cJSON_CreateObject();
 				cJSON_AddBoolToObject(response, "success", true);
-				cJSON_AddNumberToObject(response, "filesize", getFileSize(filename));
+				cJSON_AddNumberToObject(response, "filesize", getFileSize(userDir, filename));
 				const char* success = cJSON_Print(response);
 				cJSON_Delete(response);
 
@@ -178,7 +232,7 @@ void* serveClient(void* args) {
 				if (json_response != NULL) {
 					cJSON* success_item = cJSON_GetObjectItem(json_response, "success");
 					if (cJSON_IsBool(success_item) && cJSON_IsTrue(success_item)) {
-						sendFile(filename, arg->client_socket);
+						sendFile(userDir, filename, arg->client_socket);
 					}
 					cJSON_Delete(json_response);
 				}
@@ -188,7 +242,7 @@ void* serveClient(void* args) {
 				send(arg->client_socket, success, sizeof(success), 0);
 			}
 		} else if (strcmp(command, "VIEW") == 0) {
-			sendFileList(arg->client_socket);
+			sendFileList(userDir, arg->client_socket);
 		} else if (strcmp(command, "EXIT") == 0) {
 			//close(arg->client_socket);
 			printf("EXIT called: %d",arg->client_socket);
