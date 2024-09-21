@@ -1,0 +1,6 @@
+{
+    "port": 14000,
+    "threads": 12,
+    "dataDir": "data",
+    "dataLimit": 10000    
+}

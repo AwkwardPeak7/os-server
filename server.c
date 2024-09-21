@@ -125,6 +125,8 @@ void sendFileList(const char* dataDir, int socketfd) {
 
 struct server_args {
 	int client_socket;
+	char* dataDir;
+	unsigned int dataLimit;
 };
 
 bool directoryExists(const char* path) {
@@ -132,7 +134,7 @@ bool directoryExists(const char* path) {
 	return stat(path, &st) == 0 && S_ISDIR(st.st_mode);
 }
 
-const char* Authenticate(int socketfd, const char* dataDir) {
+char* Authenticate(int socketfd, const char* dataDir) {
 	char client_message[2000];
 
 	recv(socketfd , client_message , 2000 , 0);
@@ -181,7 +183,7 @@ void* serveClient(void* args) {
 	printf("Connection accepted from %d\n", arg->client_socket);
 
 	// TODO: data dir configuarable
-	const char* userDir = Authenticate(arg->client_socket, "data");	
+	char* userDir = Authenticate(arg->client_socket, arg->dataDir);	
 	if (userDir == NULL) {
 		close(arg->client_socket);
 		return NULL;
@@ -245,6 +247,7 @@ void* serveClient(void* args) {
 			//close(arg->client_socket);
 			printf("EXIT called: %d",arg->client_socket);
 			close(arg->client_socket);
+			free(userDir);
 
 			return NULL; // exit
 		} else {
@@ -257,11 +260,65 @@ void* serveClient(void* args) {
 		cJSON_Delete(json);
 	}
 
+	free(userDir);
 	return NULL;
 }
 
+cJSON* parseConfig() {
+	FILE* file = fopen("config.json", "r");
+	if (file == NULL) {
+		perror("Couldn't open config file");
+		return NULL;
+	}
+
+	fseek(file, 0, SEEK_END);
+	long length = ftell(file);
+	fseek(file, 0, SEEK_SET);
+
+	char* buffer = (char*)malloc(length + 1);
+	fread(buffer, 1, length, file);
+	buffer[length] = '\0';
+
+	fclose(file);
+
+	cJSON* json = cJSON_Parse(buffer);
+	free(buffer);
+
+	return json;
+}
+
+void makePath(const char* path) {
+	char temp[2048];
+	snprintf(temp, sizeof(temp), "%s", path);
+
+	for (char* p = temp + 1; *p; p++) {
+		if (*p == '/') {
+			*p = '\0';
+			mkdir(temp, S_IRWXU | S_IRWXG);
+			*p = '/';
+		}
+	}
+	mkdir(temp, S_IRWXU | S_IRWXG);
+}
+
+
 int main() {
 	printf("pid: %d\n", getpid());
+
+	cJSON* config = parseConfig();
+	if (config == NULL) {
+		perror("Couldn't parse config file");
+		return 1;
+	}	
+
+	const char* dataDir = cJSON_GetObjectItem(config, "dataDir")->valuestring;
+	if (!directoryExists(dataDir)) {
+		makePath(dataDir);
+		if (!directoryExists(dataDir)) {
+			perror("Couldn't create data directory");
+			return 1;
+		}
+	}
 	
 	int server_socket = socket(AF_INET , SOCK_STREAM , 0);
 	if (server_socket == -1) {
@@ -273,30 +330,42 @@ int main() {
     struct sockaddr_in server;
 	server.sin_family = AF_INET;
 	server.sin_addr.s_addr = INADDR_ANY;
-	server.sin_port = htons(14000);
+	server.sin_port = htons(cJSON_GetObjectItem(config, "port")->valueint);
 	
 	if(bind(server_socket,(struct sockaddr *)&server , sizeof(server)) < 0) {
 		perror("bind failed. Error");
 		return 1;
 	}
 	puts("bind done");
-	
-	listen(server_socket , 3);
+
+	int threads = cJSON_GetObjectItem(config, "threads")->valueint;
+	// FIXME: this shit only accepting 3 connections/ only making 3 threads
+	listen(server_socket, threads);
 	
 	int c = sizeof(struct sockaddr_in);
 	
     struct sockaddr_in client;
 
-	pthread_t thread_ids[3] = {-1, -1, -1};
-	int client_sockets[3] = {-1, -1, -1};
-    struct server_args args[3] = {};
+	pthread_t* thread_ids = (pthread_t*)malloc(threads * sizeof(pthread_t));
+	int* client_sockets = (int*)malloc(threads * sizeof(int));
+	struct server_args* args = (struct server_args*)malloc(threads * sizeof(struct server_args));
+
+	for (int i = 0; i < threads; i++) {
+		thread_ids[i] = -1;
+		client_sockets[i] = -1;
+
+		args[i].dataDir = dataDir;
+		args[i].dataLimit = cJSON_GetObjectItem(config, "dataLimit")->valueint;
+	}
+
+	cJSON_Delete(config);
 
 	while (1) {
-		puts("main -- first for");
-		for (int i = 0; i < 3; i++) {
+		for (int i = 0; i < threads; i++) {
 			if (client_sockets[i] != -1) continue;
 
 			int client_sock = accept(server_socket, (struct sockaddr *)&client, (socklen_t*)&c);
+
 			if (client_sock < 0) {
 				perror("accept failed");
 				continue;
@@ -308,12 +377,10 @@ int main() {
 			pthread_create(&thread_ids[i], NULL, serveClient, (void*)&args[i]);
 		}
 
-		puts("main -- second for");
-		for (int i = 0; i < 3; i++) {
+		for (int i = 0; i < threads; i++) {
             if (thread_ids[i] != -1) {
                 int res = pthread_tryjoin_np(thread_ids[i], NULL);
                 if (res == 0) {
-					//printf("thread %d terminated", thread_ids[i]);
                     client_sockets[i] = -1;
                     thread_ids[i] = -1;
                 }
@@ -321,8 +388,12 @@ int main() {
         }
 
 		usleep(100000); // 100ms
-		
 	}
+
+	free(thread_ids);
+	free(client_sockets);
+	free(args);
+	close(server_socket);
 	
 	return 0;
 }
