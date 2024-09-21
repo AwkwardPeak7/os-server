@@ -340,7 +340,7 @@ int main() {
 		return 1;
 	}	
 
-	const char* dataDir = cJSON_GetObjectItem(config, "dataDir")->valuestring;
+	char* dataDir = cJSON_GetObjectItem(config, "dataDir")->valuestring;
 	if (!directoryExists(dataDir)) {
 		makePath(dataDir);
 		if (!directoryExists(dataDir)) {
