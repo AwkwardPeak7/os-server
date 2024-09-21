@@ -383,7 +383,8 @@ int main() {
 		thread_ids[i] = -1;
 		client_sockets[i] = -1;
 
-		args[i].dataDir = dataDir;
+		args[i].dataDir = (char*)malloc(strlen(dataDir));
+		strcpy(args[i].dataDir, dataDir);
 		args[i].dataLimit = cJSON_GetObjectItem(config, "dataLimit")->valueint;
 	}
 
