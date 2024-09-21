@@ -177,12 +177,36 @@ char* Authenticate(int socketfd, const char* dataDir) {
 	return NULL;
 }
 
+int directorySize(const char* path) {
+	int size = 0;
+	DIR* dir = opendir(path);
+	struct dirent *entry;
+	struct stat st;
+	while ((entry = readdir(dir)) != NULL) {
+		// Skip the current and parent directories
+		if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+			continue;
+		}
+
+		// Use stat to get file type information
+		char path[2048] = {}; 
+		snprintf(path, 2048, "%s/%s", path, entry->d_name);
+		if (stat(path, &st) == 0 && S_ISDIR(st.st_mode)) {
+			continue;
+		}
+
+		size += st.st_size;
+	}
+	closedir(dir);
+
+	return size;
+}
+
 void* serveClient(void* args) {
 	struct server_args* arg = (struct server_args*) args;
 
 	printf("Connection accepted from %d\n", arg->client_socket);
 
-	// TODO: data dir configuarable
 	char* userDir = Authenticate(arg->client_socket, arg->dataDir);	
 	if (userDir == NULL) {
 		close(arg->client_socket);
@@ -206,7 +230,12 @@ void* serveClient(void* args) {
 		if (strcmp(command, "UPLOAD") == 0) {
 			const char* filename = cJSON_GetObjectItem(json, "filename")->valuestring;
 			int filesize = cJSON_GetObjectItem(json, "filesize")->valueint;
-			// TODO: file size check for failure
+			int userDirSize = directorySize(userDir);
+			if (userDirSize + filesize > arg->dataLimit) {
+				char success[] = "{\"success\": false}";
+				send(arg->client_socket, success, sizeof(success), 0);
+				continue;
+			}
 			char success[] = "{\"success\": true}";
 			send(arg->client_socket, success, sizeof(success), 0);
 
