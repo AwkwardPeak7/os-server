@@ -10,8 +10,6 @@
 #include <sys/types.h>
 #include <dirent.h>
 #include <time.h>
-
-// #define _GNU_SOURCE // for pthread_tryjoin_np function
 #include <pthread.h>
 
 #define CHUNK_SIZE 128 
