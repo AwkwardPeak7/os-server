@@ -7,3 +7,5 @@ run:
 
 clean:
 	rm -rf build
+
+all: build
