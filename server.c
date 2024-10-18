@@ -329,7 +329,7 @@ void makePath(const char *path) {
 
 int main() {
 	createQueue(14);
-	createMap();
+	createMap(14);
 
 	printf("pid: %d\n", getpid());
 
