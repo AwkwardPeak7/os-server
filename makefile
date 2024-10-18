@@ -10,12 +10,16 @@ filesystem: utils/filesystem/filesystem.c utils/filesystem/filesystem.h
 	@mkdir -p build/filesystem
 	gcc -O3 utils/filesystem/filesystem.c -o build/filesystem/filesystem.o -c
 
+transfer: transfer/transfer.c transfer/transfer.h
+	@mkdir -p build/transfer
+	gcc -O3 transfer/transfer.c -o build/transfer/transfer.o -c
+
 server: server.c
 	@mkdir -p build
 	gcc -O3 server.c -o build/server.o -D_GNU_SOURCE -c
 
-all: queue map filesystem server
-	gcc build/queue/queue.o build/map/map.o build/filesystem/filesystem.o build/server.o -o build/server.elf -lpthread -lcjson
+all: queue map filesystem transfer server
+	gcc build/queue/queue.o build/map/map.o build/filesystem/filesystem.o build/transfer/transfer.o build/server.o -o build/server.elf -lpthread -lcjson
 
 build: all
 
