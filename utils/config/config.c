@@ -1,5 +1,6 @@
 #include "config.h"
 #include <stdio.h>
+#include <stdlib.h>
 
 cJSON *parseConfig() {
 	FILE *file = fopen("config.json", "r");
