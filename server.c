@@ -11,27 +11,12 @@
 #include <dirent.h>
 #include <pthread.h>
 
+#include "utils/filesystem/filesystem.h"
 #include "utils/queue/queue.h"
 #include "utils/map/map.h"
 
 #define CHUNK_SIZE 128
 
-bool fileExists(const char *dataDir, const char *filename) {
-	char path[2048] = {};
-	snprintf(path, 2048, "%s/%s", dataDir, filename);
-
-	return access(path, F_OK) == 0;
-}
-
-unsigned int getFileSize(const char *dataDir, const char *filename) {
-	char path[2048] = {};
-	snprintf(path, 2048, "%s/%s", dataDir, filename);
-
-	struct stat st;
-	stat(path, &st);
-
-	return st.st_size;
-}
 
 void sendFileSize(const char *dataDir, const char *filename, int socketfd) {
 	const unsigned int size = getFileSize(dataDir, filename);
@@ -131,11 +116,6 @@ struct server_args {
 	unsigned int dataLimit;
 };
 
-bool directoryExists(const char *path) {
-	struct stat st;
-	return stat(path, &st) == 0 && S_ISDIR(st.st_mode);
-}
-
 char *Authenticate(int socket, const char *dataDir) {
 	char client_message[2000];
 
@@ -179,31 +159,6 @@ char *Authenticate(int socket, const char *dataDir) {
 	return NULL;
 }
 
-unsigned int directorySize(const char *path) {
-	unsigned int size = 0;
-	DIR *dir = opendir(path);
-	struct dirent *entry;
-	struct stat st;
-	while ((entry = readdir(dir)) != NULL) {
-		// Skip the current and parent directories
-		if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
-			continue;
-		}
-
-		// Use stat to get file type information
-		char filePath[2048] = {};
-		snprintf(filePath, 2048, "%s/%s", filePath, entry->d_name);
-		if (stat(filePath, &st) == 0 && S_ISDIR(st.st_mode)) {
-			continue;
-		}
-
-		size += st.st_size;
-	}
-	closedir(dir);
-
-	return size;
-}
-
 void *serveClient(void *args) {
 	const struct server_args *arg = (struct server_args *) args;
 
@@ -232,7 +187,7 @@ void *serveClient(void *args) {
 		if (strcmp(command, "UPLOAD") == 0) {
 			const char *filename = cJSON_GetObjectItem(json, "filename")->valuestring;
 			const int filesize = cJSON_GetObjectItem(json, "filesize")->valueint;
-			const unsigned int userDirSize = directorySize(userDir);
+			const unsigned int userDirSize = getDirectorySize(userDir);
 			if (userDirSize + filesize > arg->dataLimit) {
 				const char success[] = "{\"success\": false}";
 				send(arg->client_socket, success, sizeof(success), 0);
