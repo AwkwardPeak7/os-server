@@ -2,16 +2,26 @@
 #include <stdlib.h>
 #include <string.h> 
 
-map* createMap()
+map* createMap(int maxSize) 
 {
-    map * mp= (map *)malloc(sizeof(map));
-    if (mp == NULL) {
-        return NULL;
+    // Allocate memory for the map struct
+    map *m = (map *)malloc(sizeof(map));
+    m->size = 0;
+	m->maxSize = maxSize;
+
+    m->keys = (unsigned char **)malloc(maxSize * sizeof(unsigned char *));
+
+    for (int i = 0; i < maxSize; i++) 
+	{
+        m->keys[i] = (unsigned char *)malloc(shaLength * sizeof(unsigned char));
+        memset(m->keys[i], 0, shaLength);  // Initialize the memory to 0
     }
 
-    mp->size=0;
+    // Allocate memory for values array
+    m->values = (int *)malloc(maxSize * sizeof(int));
+    memset(m->values, 0, maxSize * sizeof(int)); 
 
-    return mp;
+    return m;
 }
 
 int getIndex(map * mp, unsigned char key[]) 
@@ -74,4 +84,18 @@ void decrement(map* mp, unsigned char key[])
             mp->size--;
         } 
 	} 
+}
+
+void freeMap(map *mp) 
+{
+    if (mp) 
+	{
+        for (int i = 0; i < mp->maxSize; i++) 
+		{
+            free(mp->keys[i]);
+        }
+        free(mp->keys);
+        free(mp->values);
+        free(mp);
+    }
 }

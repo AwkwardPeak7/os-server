@@ -153,7 +153,7 @@ void *serveClient(void *args) {
 
 int main() {
 	createQueue(14);
-	createMap();
+	createMap(14);
 
 	printf("pid: %d\n", getpid());
 
