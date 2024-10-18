@@ -52,3 +52,17 @@ unsigned int getDirectorySize(const char *path) {
 
 	return size;
 }
+
+void makePath(const char *path) {
+	char temp[2048];
+	snprintf(temp, sizeof(temp), "%s", path);
+
+	for (char *p = temp + 1; *p; p++) {
+		if (*p == '/') {
+			*p = '\0';
+			mkdir(temp, S_IRWXU | S_IRWXG);
+			*p = '/';
+		}
+	}
+	mkdir(temp, S_IRWXU | S_IRWXG);
+}

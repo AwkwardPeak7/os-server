@@ -7,5 +7,6 @@ bool fileExists(const char *dataDir, const char *filename);
 unsigned int getFileSize(const char *dataDir, const char *filename);
 bool directoryExists(const char *path);
 unsigned int getDirectorySize(const char *path);
+void makePath(const char *path);
 
 #endif
