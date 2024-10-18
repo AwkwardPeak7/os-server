@@ -1,32 +1,16 @@
-#include <stdio.h>
+#include "queue.h"
 #include <stdlib.h>
 #include <string.h>
-
-typedef struct queueCell
-{
-    char* command;
-}queueCell;
-
-typedef struct Queue 
-{
-    queueCell *array;
-    int capacity;
-    int size;
-    int front;
-    int rear;
-} Queue;
 
 Queue *createQueue(int initialCapacity)
 {
     Queue *queue = (Queue *)malloc(sizeof(Queue));
     if (queue == NULL) {
-        printf("Memory allocation failed\n");
         return NULL;
     }
     queue->array = (queueCell *)malloc(initialCapacity * sizeof(queueCell));
     if (queue->array == NULL) 
     {
-        printf("Memory allocation failed\n");
         free(queue);
         return NULL;
     }
@@ -41,7 +25,6 @@ void enqueue(Queue *queue, queueCell* element)
 {
     if (queue->size == queue->capacity) 
     {
-        printf("Queue is full\n");
         return;
     }
     if (queue->size == 0)
@@ -57,7 +40,6 @@ queueCell *dequeue(Queue *queue)
 {
     if (queue->size == 0) 
     {
-        printf("Queue is empty\n");
         return NULL;
     }
     queueCell *dequeued = &queue->array[queue->front];
@@ -77,7 +59,6 @@ char *peek(Queue *queue)
 {
     if (queue->size == 0) 
     {
-        printf("Queue is empty\n");
         return NULL;
     }
     return queue->array[queue->front].command;
