@@ -2,16 +2,60 @@
 #include <stdlib.h>
 #include <string.h> 
 
-map* createMap()
+map* createMap(int maxSize) 
 {
-    map * mp= (map *)malloc(sizeof(map));
-    if (mp == NULL) {
+    // Allocate memory for the map struct
+    map *m = (map *)malloc(sizeof(map));
+    if (!m) {
+        printf("Memory allocation failed for map struct.\n");
         return NULL;
     }
 
-    mp->size=0;
+    m->size = 0;
+	m->maxSize = maxSize;
 
-    return mp;
+    m->keys = (unsigned char **)malloc(maxSize * sizeof(unsigned char *));
+    if (!m->keys) 
+	{
+        printf("Memory allocation failed for keys.\n");
+        free(m);
+        return NULL;
+    }
+
+    for (int i = 0; i < maxSize; i++) 
+	{
+        m->keys[i] = (unsigned char *)malloc(shaLength * sizeof(unsigned char));
+        if (!m->keys[i]) 
+		{
+            printf("Memory allocation failed for keys[%d].\n", i);
+            for (int j = 0; j < i; j++) 
+			{
+				free(m->keys[j]);
+			}
+            free(m->keys);
+            free(m);
+            return NULL;
+        }
+        memset(m->keys[i], 0, shaLength);  // Initialize the memory to 0
+    }
+
+    // Allocate memory for values array
+    m->values = (int *)malloc(maxSize * sizeof(int));
+    if (!m->values) 
+	{
+        printf("Memory allocation failed for values.\n");
+        for (int i = 0; i < maxSize; i++) 
+		{
+			free(m->keys[i]);
+		}
+        free(m->keys);
+        free(m);
+        return NULL;
+    }
+
+    memset(m->values, 0, maxSize * sizeof(int)); 
+
+    return m;
 }
 
 int getIndex(map * mp, unsigned char key[]) 
@@ -74,4 +118,18 @@ void decrement(map* mp, unsigned char key[])
             mp->size--;
         } 
 	} 
+}
+
+void freeMap(map *mp) 
+{
+    if (mp) 
+	{
+        for (int i = 0; i < mp->maxSize; i++) 
+		{
+            free(mp->keys[i]);
+        }
+        free(mp->keys);
+        free(mp->values);
+        free(mp);
+    }
 }
