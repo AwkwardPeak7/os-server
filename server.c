@@ -11,6 +11,9 @@
 #include <dirent.h>
 #include <pthread.h>
 
+#include "utils/queue/queue.h"
+#include "utils/map/map.h"
+
 #define CHUNK_SIZE 128
 
 bool fileExists(const char *dataDir, const char *filename) {
@@ -325,6 +328,9 @@ void makePath(const char *path) {
 
 
 int main() {
+	createQueue(14);
+	createMap();
+
 	printf("pid: %d\n", getpid());
 
 	cJSON *config = parseConfig();
