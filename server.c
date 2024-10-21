@@ -17,6 +17,10 @@
 #include "utils/map/map.h"
 #include "transfer/transfer.h"
 
+pthread_mutex_t users_lock = PTHREAD_MUTEX_INITIALIZER;
+map* logged_in_users = NULL;
+
+
 struct server_args {
 	int client_socket;
 	char *dataDir;
@@ -28,7 +32,7 @@ char *Authenticate(int socket, const char *dataDir) {
 
 	recv(socket, client_message, 2000, 0);
 	puts(client_message);
-	const cJSON *json = cJSON_Parse(client_message);
+	cJSON *json = cJSON_Parse(client_message);
 
 	if (json == NULL) {
 		const char success[] = "{\"success\": false}";
@@ -48,22 +52,27 @@ char *Authenticate(int socket, const char *dataDir) {
 
 	const bool dirExists = directoryExists(path);
 
-	if (signup && !dirExists) {
+	if ((signup && !dirExists) || (login && dirExists)) {
 		mkdir(path, S_IRWXU | S_IRWXG);
 		const char success[] = "{\"success\": true}";
 		send(socket, success, sizeof(success), 0);
-		return path;
 	}
-	if (login && dirExists) {
-		const char success[] = "{\"success\": true}";
+	else {
+		const char success[] = "{\"success\": false}";
 		send(socket, success, sizeof(success), 0);
-		return path;
+		free(path);
+		path = NULL;
 	}
-	const char success[] = "{\"success\": false}";
-	send(socket, success, sizeof(success), 0);
 
-	free(path);
-	return NULL;
+	if (path != NULL) {
+		pthread_mutex_lock(&users_lock);
+		increment(logged_in_users, (unsigned char*)hash);
+		pthread_mutex_unlock(&users_lock);
+		printf("map incremented with user: %s -> %d\n", hash, get(logged_in_users, (unsigned char*)hash));
+	}
+
+	cJSON_Delete(json);
+	return path;
 }
 
 void *serveClient(void *args) {
@@ -152,9 +161,6 @@ void *serveClient(void *args) {
 }
 
 int main() {
-	createQueue(14);
-	createMap(14);
-
 	printf("pid: %d\n", getpid());
 
 	cJSON *config = parseConfig();
@@ -210,6 +216,8 @@ int main() {
 		strcpy(args[i].dataDir, dataDir);
 		args[i].dataLimit = cJSON_GetObjectItem(config, "dataLimit")->valueint;
 	}
+
+	logged_in_users = createMap(threads);
 
 	cJSON_Delete(config);
 
