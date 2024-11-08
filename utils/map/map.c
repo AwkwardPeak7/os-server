@@ -175,3 +175,79 @@ bool __getExistingOrNewFileNameIndex(mapEntry* me, char *fileName, int maxSize) 
     }
     return idx;
 }
+
+bool __getExistingFileNameIndex(mapEntry* me, char *fileName, int maxSize) {
+    for (size_t i = 0; i < maxSize; i++) {
+        if (me->fileNames[i] != NULL && strcmp(me->fileNames[i], fileName) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+void startRead(map* mp, unsigned char key[], char* fileName) {
+    // find existing
+    int idx = __getExistingIndex(mp, key);
+    if (idx == -1) {
+        return; // we shouldn't be here
+    }
+
+    mapEntry* me = mp->values[idx];
+
+    pthread_mutex_lock(&me->fileNamesLock);
+
+    // find existing or new index for file name
+    int fileIdx = __getExistingOrNewFileNameIndex(me, key, mp->maxSize);
+
+    if (fileIdx == -1) {
+        pthread_mutex_unlock(&me->fileNamesLock);
+        return; // we really shouldn't be here...
+    }
+
+    // set file name if it's not set
+    if (me->fileNames[fileIdx] == NULL) {
+        me->fileNames[fileIdx] = (char *)malloc(strlen(fileName));
+        strcpy(me->fileNames[fileIdx], fileName);
+    }
+
+    pthread_mutex_unlock(&me->fileNamesLock);
+
+    __startRead(me);
+}
+
+void __startRead(mapEntry* me) {
+    pthread_mutex_lock(&me->readingLock);
+    if (me->readingCount == 0) {
+        pthread_mutex_lock(&me->writingLock);
+    }
+    me->readingCount++;
+    pthread_mutex_unlock(&me->readingLock);
+}
+
+void stopRead(map* mp, unsigned char key[], char* fileName) {
+    // find existing
+    int idx = __getExistingIndex(mp, key);
+    if (idx == -1) {
+        return; // we shouldn't be here
+    }
+
+    mapEntry* me = mp->values[idx];
+
+    // find existing or new index for file name
+    int fileIdx = __getExistingFileNameIndex(me, key, mp->maxSize);
+
+    if (fileIdx == -1) {
+        return; // we really shouldn't be here...
+    }
+
+    __stopRead(me);
+}
+
+void __stopRead(mapEntry* me) {
+    pthread_mutex_lock(&me->readingLock);
+    me->readingCount--;
+    if (me->readingCount == 0) {
+        pthread_mutex_unlock(&me->writingLock);
+    }
+    pthread_mutex_unlock(&me->readingLock);
+}

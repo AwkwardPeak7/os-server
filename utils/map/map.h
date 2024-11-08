@@ -35,10 +35,14 @@ void removeUser(map* mp, unsigned char key[]);
 // or when writing internal variable is false, then it returns false
 void startRead(map* mp, unsigned char key[], char* fileName);
 
+void stopRead(map* mp, unsigned char key[], char* fileName);
+
 // can write specified file or not
 // if writing internal variable is true, then it returns false
 // or when reading internal variable is not 0, then it returns false
 void startWrite(map* mp, unsigned char key[], char* fileName);
+
+void stopWrite(map* mp, unsigned char key[], char* fileName);
 
 
 #endif
