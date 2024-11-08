@@ -97,6 +97,9 @@ void *serveClient(void *args) {
 		if (strcmp(command, "UPLOAD") == 0) {
 			const char *filename = cJSON_GetObjectItem(json, "filename")->valuestring;
 			const int filesize = cJSON_GetObjectItem(json, "filesize")->valueint;
+			
+			startWrite(user_sync_map, (unsigned char*)userDir, (char*)filename);
+
 			// TODO: optimize this
 			const unsigned int userDirSize = getDirectorySize(userDir);
 			if (userDirSize + filesize > arg->dataLimit) {
@@ -104,7 +107,6 @@ void *serveClient(void *args) {
 				send(arg->client_socket, success, sizeof(success), 0);
 				continue;
 			}
-			startWrite(user_sync_map, (unsigned char*)userDir, (char*)filename);
 
 			const char success[] = "{\"success\": true}";
 			send(arg->client_socket, success, sizeof(success), 0);
@@ -114,7 +116,9 @@ void *serveClient(void *args) {
 			stopWrite(user_sync_map, (unsigned char*)userDir, (char*)filename);
 		} else if (strcmp(command, "DOWNLOAD") == 0) {
 			const char *filename = cJSON_GetObjectItem(json, "filename")->valuestring;
+
 			startRead(user_sync_map, (unsigned char*)userDir, (char*)filename);
+
 			if (fileExists(userDir, filename)) {
 				cJSON *response = cJSON_CreateObject();
 				cJSON_AddBoolToObject(response, "success", true);
@@ -141,8 +145,10 @@ void *serveClient(void *args) {
 				const char success[] = "{\"success\": false}";
 				send(arg->client_socket, success, sizeof(success), 0);
 			}
+
 			stopRead(user_sync_map, (unsigned char*)userDir, (char*)filename);
 		} else if (strcmp(command, "VIEW") == 0) {
+			// TODO: lock?
 			sendFileList(userDir, arg->client_socket);
 		} else if (strcmp(command, "EXIT") == 0) {
 			printf("EXIT called: %d", arg->client_socket);

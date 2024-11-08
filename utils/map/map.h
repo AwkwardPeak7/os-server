@@ -10,10 +10,14 @@ typedef struct mapEntry
     pthread_mutex_t fileNamesLock;
 
     unsigned int userCount;
+    
     unsigned int *readingCount;
 
     pthread_mutex_t *readingLock;
     pthread_mutex_t *writingLock;
+
+    unsigned int *referenceCount;
+    pthread_mutex_t *referenceLock;
 } mapEntry;
 
 typedef struct map
