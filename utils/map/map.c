@@ -251,3 +251,62 @@ void __stopRead(mapEntry* me) {
     }
     pthread_mutex_unlock(&me->readingLock);
 }
+
+void startWrite(map* mp, unsigned char key[], char* fileName) {
+    // find existing
+    int idx = __getExistingIndex(mp, key);
+    if (idx == -1) {
+        return; // we shouldn't be here
+    }
+
+    mapEntry* me = mp->values[idx];
+
+    pthread_mutex_lock(&me->fileNamesLock);
+
+    // find existing or new index for file name
+    int fileIdx = __getExistingOrNewFileNameIndex(me, key, mp->maxSize);
+
+    if (fileIdx == -1) {
+        pthread_mutex_unlock(&me->fileNamesLock);
+        return; // we really shouldn't be here...
+    }
+
+    // set file name if it's not set
+    if (me->fileNames[fileIdx] == NULL) {
+        me->fileNames[fileIdx] = (char *)malloc(strlen(fileName));
+        strcpy(me->fileNames[fileIdx], fileName);
+    }
+
+    pthread_mutex_unlock(&me->fileNamesLock);
+
+    __startWrite(me);
+}
+
+void __startWrite(mapEntry* me) {
+    pthread_mutex_lock(&me->readingLock);
+    pthread_mutex_lock(&me->writingLock);
+}
+
+void stopWrite(map* mp, unsigned char key[], char* fileName) {
+    // find existing
+    int idx = __getExistingIndex(mp, key);
+    if (idx == -1) {
+        return; // we shouldn't be here
+    }
+
+    mapEntry* me = mp->values[idx];
+
+    // find existing or new index for file name
+    int fileIdx = __getExistingFileNameIndex(me, key, mp->maxSize);
+
+    if (fileIdx == -1) {
+        return; // we really shouldn't be here...
+    }
+
+    __stopWrite(me);
+}
+
+void __stopWrite(mapEntry* me) {
+    pthread_mutex_unlock(&me->writingLock);
+    pthread_mutex_unlock(&me->readingLock);
+}
