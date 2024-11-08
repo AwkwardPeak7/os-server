@@ -63,16 +63,14 @@ mapEntry* __createMapEntry(int maxSize) {
 
     entry->fileNames = (char **)malloc(maxSize * sizeof(char *));
     entry->readingCount = (int*)malloc(maxSize * sizeof(int));
-    entry->readingCountLock = (pthread_mutex_t *)malloc(maxSize * sizeof(pthread_mutex_t));
+    entry->readingLock = (pthread_mutex_t *)malloc(maxSize * sizeof(pthread_mutex_t));
     entry->writingLock = (pthread_mutex_t *)malloc(maxSize * sizeof(pthread_mutex_t));
-    entry->blockRead = (pthread_mutex_t *)malloc(maxSize * sizeof(pthread_mutex_t));
 
     for (size_t i = 0; i < maxSize; i++) {
         entry->fileNames[i] = NULL;
         entry->readingCount[i] = 0;
-        entry->readingCountLock[i] = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
+        entry->readingLock[i] = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
         entry->writingLock[i] = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
-        entry->blockRead[i] = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
     }
 
     return entry;
@@ -82,16 +80,14 @@ mapEntry* __createMapEntry(int maxSize) {
 void __freeMapEntry(mapEntry *entry, int maxSize) {
     for (size_t i = 0; i < maxSize; i++) {
         free(entry->fileNames[i]);
-        pthread_mutex_destroy(&entry->readingCountLock[i]);
-        pthread_mutex_destroy(&entry->readingCountLock[i]);
+        pthread_mutex_destroy(&entry->readingLock[i]);
         pthread_mutex_destroy(&entry->writingLock[i]);
     }
     pthread_mutex_destroy(&entry->fileNamesLock);
     free(entry->fileNames);
     free(entry->readingCount);
-    free(entry->readingCountLock);
+    free(entry->readingLock);
     free(entry->writingLock);
-    free(entry->blockRead);
     free(entry);
 }
 

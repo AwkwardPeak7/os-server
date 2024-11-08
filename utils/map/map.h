@@ -20,9 +20,8 @@ typedef struct mapEntry
     unsigned int userCount;
     unsigned int *readingCount;
 
-    pthread_mutex_t *readingCountLock;
+    pthread_mutex_t *readingLock;
     pthread_mutex_t *writingLock;
-    pthread_mutex_t *blockRead;
 } mapEntry;
 
 map* createMap(int maxSize);
