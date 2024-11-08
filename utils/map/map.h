@@ -4,14 +4,6 @@
 #include <stdbool.h>
 #include <pthread.h>
 
-typedef struct map
-{
-    int maxSize;
-    char* *keys;
-    mapEntry* *values;
-    pthread_mutex_t lock;
-} map;
-
 typedef struct mapEntry
 {
     unsigned char* *fileNames;
@@ -23,6 +15,14 @@ typedef struct mapEntry
     pthread_mutex_t *readingLock;
     pthread_mutex_t *writingLock;
 } mapEntry;
+
+typedef struct map
+{
+    int maxSize;
+    char* *keys;
+    mapEntry* *values;
+    pthread_mutex_t lock;
+} map;
 
 map* createMap(int maxSize);
 void freeMap(map* mp);

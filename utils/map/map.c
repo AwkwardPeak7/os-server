@@ -61,7 +61,7 @@ mapEntry* __createMapEntry(int maxSize) {
     entry->userCount = 0;
     entry->fileNamesLock = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
 
-    entry->fileNames = (char **)malloc(maxSize * sizeof(char *));
+    entry->fileNames = (unsigned char **)malloc(maxSize * sizeof(unsigned char *));
     entry->readingCount = (int*)malloc(maxSize * sizeof(int));
     entry->readingLock = (pthread_mutex_t *)malloc(maxSize * sizeof(pthread_mutex_t));
     entry->writingLock = (pthread_mutex_t *)malloc(maxSize * sizeof(pthread_mutex_t));
@@ -97,7 +97,7 @@ void addUser(map *mp, unsigned char key[]) {
     // find existing or new index
     int idx = __getExistingOrNewIndex(mp, key);
     if (idx == -1) {
-        pthread_mytex_unlock(&mp->lock);
+        pthread_mutex_unlock(&mp->lock);
         // map is full, and we shouldn't be here...
         return;
     }
@@ -212,16 +212,13 @@ void startRead(map* mp, unsigned char key[], char* fileName) {
 
     pthread_mutex_unlock(&me->fileNamesLock);
 
-    __startRead(me);
-}
-
-void __startRead(mapEntry* me) {
-    pthread_mutex_lock(&me->readingLock);
+    // main logic
+    pthread_mutex_lock(&me->readingLock[fileIdx]);
     if (me->readingCount == 0) {
-        pthread_mutex_lock(&me->writingLock);
+        pthread_mutex_lock(&me->writingLock[fileIdx]);
     }
     me->readingCount++;
-    pthread_mutex_unlock(&me->readingLock);
+    pthread_mutex_unlock(&me->readingLock[fileIdx]);
 }
 
 void stopRead(map* mp, unsigned char key[], char* fileName) {
@@ -240,16 +237,12 @@ void stopRead(map* mp, unsigned char key[], char* fileName) {
         return; // we really shouldn't be here...
     }
 
-    __stopRead(me);
-}
-
-void __stopRead(mapEntry* me) {
-    pthread_mutex_lock(&me->readingLock);
+    pthread_mutex_lock(&me->readingLock[fileIdx]);
     me->readingCount--;
     if (me->readingCount == 0) {
-        pthread_mutex_unlock(&me->writingLock);
+        pthread_mutex_unlock(&me->writingLock[fileIdx]);
     }
-    pthread_mutex_unlock(&me->readingLock);
+    pthread_mutex_unlock(&me->readingLock[fileIdx]);
 }
 
 void startWrite(map* mp, unsigned char key[], char* fileName) {
@@ -279,12 +272,8 @@ void startWrite(map* mp, unsigned char key[], char* fileName) {
 
     pthread_mutex_unlock(&me->fileNamesLock);
 
-    __startWrite(me);
-}
-
-void __startWrite(mapEntry* me) {
-    pthread_mutex_lock(&me->readingLock);
-    pthread_mutex_lock(&me->writingLock);
+    pthread_mutex_lock(&me->readingLock[fileIdx]);
+    pthread_mutex_lock(&me->writingLock[fileIdx]);
 }
 
 void stopWrite(map* mp, unsigned char key[], char* fileName) {
@@ -303,10 +292,6 @@ void stopWrite(map* mp, unsigned char key[], char* fileName) {
         return; // we really shouldn't be here...
     }
 
-    __stopWrite(me);
-}
-
-void __stopWrite(mapEntry* me) {
-    pthread_mutex_unlock(&me->writingLock);
-    pthread_mutex_unlock(&me->readingLock);
+    pthread_mutex_unlock(&me->writingLock[fileIdx]);
+    pthread_mutex_unlock(&me->readingLock[fileIdx]);
 }
