@@ -22,6 +22,7 @@ map* createMap(int maxSize);
 void freeMap(map* mp);
 
 void addUser(map* mp, unsigned char key[]);
+void removeUser(map* mp, unsigned char key[]);
 
 // can read specified file or not
 // if readingcount internal variable is not 0, then it returns false
