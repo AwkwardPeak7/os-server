@@ -17,9 +17,7 @@
 #include "utils/map/map.h"
 #include "transfer/transfer.h"
 
-pthread_mutex_t users_lock = PTHREAD_MUTEX_INITIALIZER;
-map* logged_in_users = NULL;
-
+map* user_sync_map = NULL;
 
 struct server_args {
 	int client_socket;
@@ -65,10 +63,7 @@ char *Authenticate(int socket, const char *dataDir) {
 	}
 
 	if (path != NULL) {
-		pthread_mutex_lock(&users_lock);
-		increment(logged_in_users, (unsigned char*)hash);
-		pthread_mutex_unlock(&users_lock);
-		printf("map incremented with user: %s -> %d\n", hash, get(logged_in_users, (unsigned char*)hash));
+		addUser(user_sync_map, (unsigned char*)hash);
 	}
 
 	cJSON_Delete(json);
@@ -103,18 +98,24 @@ void *serveClient(void *args) {
 		if (strcmp(command, "UPLOAD") == 0) {
 			const char *filename = cJSON_GetObjectItem(json, "filename")->valuestring;
 			const int filesize = cJSON_GetObjectItem(json, "filesize")->valueint;
+			// TODO: optimize this
 			const unsigned int userDirSize = getDirectorySize(userDir);
 			if (userDirSize + filesize > arg->dataLimit) {
 				const char success[] = "{\"success\": false}";
 				send(arg->client_socket, success, sizeof(success), 0);
 				continue;
 			}
+			startWrite(user_sync_map, (unsigned char*)userDir, (char*)filename);
+
 			const char success[] = "{\"success\": true}";
 			send(arg->client_socket, success, sizeof(success), 0);
 
 			receiveFile(userDir, filename, filesize, arg->client_socket);
+
+			stopWrite(user_sync_map, (unsigned char*)userDir, (char*)filename);
 		} else if (strcmp(command, "DOWNLOAD") == 0) {
 			const char *filename = cJSON_GetObjectItem(json, "filename")->valuestring;
+			startRead(user_sync_map, (unsigned char*)userDir, (char*)filename);
 			if (fileExists(userDir, filename)) {
 				cJSON *response = cJSON_CreateObject();
 				cJSON_AddBoolToObject(response, "success", true);
@@ -141,11 +142,13 @@ void *serveClient(void *args) {
 				const char success[] = "{\"success\": false}";
 				send(arg->client_socket, success, sizeof(success), 0);
 			}
+			stopRead(user_sync_map, (unsigned char*)userDir, (char*)filename);
 		} else if (strcmp(command, "VIEW") == 0) {
 			sendFileList(userDir, arg->client_socket);
 		} else if (strcmp(command, "EXIT") == 0) {
 			printf("EXIT called: %d", arg->client_socket);
 			close(arg->client_socket);
+			removeUser(user_sync_map, (unsigned char*)userDir);
 			free(userDir);
 
 			return NULL; // exit
@@ -197,7 +200,6 @@ int main() {
 	puts("bind done");
 
 	const int threads = cJSON_GetObjectItem(config, "threads")->valueint;
-	// FIXME: this shit only accepting 3 connections/ only making 3 threads
 	listen(server_socket, threads);
 
 	int c = sizeof(struct sockaddr_in);
@@ -217,7 +219,7 @@ int main() {
 		args[i].dataLimit = cJSON_GetObjectItem(config, "dataLimit")->valueint;
 	}
 
-	logged_in_users = createMap(threads);
+	user_sync_map = createMap(threads);
 
 	cJSON_Delete(config);
 
