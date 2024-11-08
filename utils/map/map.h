@@ -2,20 +2,27 @@
 #define MAP_H
 
 #include <stdbool.h>
+#include <pthread.h>
 
 typedef struct map
 {
     int maxSize;
     char* *keys;
     mapEntry* *values;
+    pthread_mutex_t lock;
 } map;
 
 typedef struct mapEntry
 {
-    unsigned int userCount;
     unsigned char* *fileNames;
+    pthread_mutex_t fileNamesLock;
+
+    unsigned int userCount;
     unsigned int *readingCount;
-    bool *writing;
+
+    pthread_mutex_t *readingCountLock;
+    pthread_mutex_t *writingLock;
+    pthread_mutex_t *blockRead;
 } mapEntry;
 
 map* createMap(int maxSize);
@@ -27,12 +34,12 @@ void removeUser(map* mp, unsigned char key[]);
 // can read specified file or not
 // if readingcount internal variable is not 0, then it returns false
 // or when writing internal variable is false, then it returns false
-bool canRead(map* mp, unsigned char key[], char** fileName);
+void startRead(map* mp, unsigned char key[], char* fileName);
 
 // can write specified file or not
 // if writing internal variable is true, then it returns false
 // or when reading internal variable is not 0, then it returns false
-bool canWrite(map* mp, unsigned char key[], char* fileName);
+void startWrite(map* mp, unsigned char key[], char* fileName);
 
 
 #endif
