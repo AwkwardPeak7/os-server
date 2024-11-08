@@ -21,10 +21,10 @@ server: server.c
 	gcc -O3 server.c -o build/server.o -D_GNU_SOURCE -c
 
 all: map filesystem config transfer server
-	gcc -O3 build/map/map.o build/filesystem/filesystem.o build/config/config.o build/transfer/transfer.o build/server.o -o build/server.elf -lpthread -lcjson
+	gcc -O3 build/map/map.o build/filesystem/filesystem.o build/config/config.o build/transfer/transfer.o build/server.o -o build/server -lpthread -lcjson
 
 run:
-	build/server.elf
+	build/server
 
 clean:
 	rm -rf build
