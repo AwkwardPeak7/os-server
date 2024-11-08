@@ -1,9 +1,5 @@
 build: all
 
-queue: utils/queue/queue.c utils/queue/queue.h
-	@mkdir -p build/queue
-	gcc -O3 utils/queue/queue.c -o build/queue/queue.o -c
-
 map: utils/map/map.c utils/map/map.h
 	@mkdir -p build/map
 	gcc -O3 utils/map/map.c -o build/map/map.o -c
@@ -24,8 +20,8 @@ server: server.c
 	@mkdir -p build
 	gcc -O3 server.c -o build/server.o -D_GNU_SOURCE -c
 
-all: queue map filesystem config transfer server
-	gcc build/queue/queue.o build/map/map.o build/filesystem/filesystem.o build/config/config.o build/transfer/transfer.o build/server.o -o build/server.elf -lpthread -lcjson
+all: map filesystem config transfer server
+	gcc -O3 build/map/map.o build/filesystem/filesystem.o build/config/config.o build/transfer/transfer.o build/server.o -o build/server.elf -lpthread -lcjson
 
 run:
 	build/server.elf

@@ -13,7 +13,6 @@
 
 #include "utils/filesystem/filesystem.h"
 #include "utils/config/config.h"
-#include "utils/queue/queue.h"
 #include "utils/map/map.h"
 #include "transfer/transfer.h"
 
