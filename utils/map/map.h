@@ -4,20 +4,26 @@
 #include <stdbool.h>
 #include <pthread.h>
 
+typedef struct fileEntry
+{
+    unsigned char* fileName;
+
+    unsigned int readingCount;
+
+    pthread_mutex_t readingLock;
+    pthread_mutex_t writingLock;
+
+    unsigned int referenceCount;
+    pthread_mutex_t referenceLock;
+} fileEntry;
+
 typedef struct mapEntry
 {
-    unsigned char* *fileNames;
-    pthread_mutex_t fileNamesLock;
+    fileEntry *fileEntries;
+
+    pthread_mutex_t fileEntriesLock;
 
     unsigned int userCount;
-    
-    unsigned int *readingCount;
-
-    pthread_mutex_t *readingLock;
-    pthread_mutex_t *writingLock;
-
-    unsigned int *referenceCount;
-    pthread_mutex_t *referenceLock;
 } mapEntry;
 
 typedef struct map

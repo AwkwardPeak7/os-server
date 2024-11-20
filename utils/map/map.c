@@ -31,7 +31,7 @@ map* createMap(int maxSize) {
 }
 
 // private function to get existing or new index
-int __getExistingOrNewIndex(map *mp, unsigned char key[]) {
+int __getExistingOrNewEntryIndex(map *mp, unsigned char key[]) {
     int idx = -1;
     for (size_t i = 0; i < mp->maxSize; i++) {
         if (mp->keys[i] == NULL) {
@@ -47,7 +47,7 @@ int __getExistingOrNewIndex(map *mp, unsigned char key[]) {
     return idx;
 }
 
-int __getExistingIndex(map *mp, unsigned char key[]) {
+int __getExistingEntryIndex(map *mp, unsigned char key[]) {
     for (size_t i = 0; i < mp->maxSize; i++) {
         if (mp->keys[i] != NULL && strcmp(mp->keys[i], key) == 0) {
             return i;
@@ -61,41 +61,23 @@ mapEntry* __createMapEntry(int maxSize) {
     mapEntry *entry = (mapEntry *)malloc(sizeof(mapEntry));
 
     entry->userCount = 0;
-    entry->fileNamesLock = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
+    entry->fileEntriesLock = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
+    entry->fileEntries = (fileEntry *)malloc(maxSize * sizeof(fileEntry));
 
-    entry->fileNames = (unsigned char **)malloc(maxSize * sizeof(unsigned char *));
-    entry->readingCount = (int*)malloc(maxSize * sizeof(int));
-    entry->readingLock = (pthread_mutex_t *)malloc(maxSize * sizeof(pthread_mutex_t));
-    entry->writingLock = (pthread_mutex_t *)malloc(maxSize * sizeof(pthread_mutex_t));
-    entry->referenceCount = (int*)malloc(maxSize * sizeof(int));
-    entry->referenceLock = (pthread_mutex_t *)malloc(maxSize * sizeof(pthread_mutex_t));
-
-    for (size_t i = 0; i < maxSize; i++) {
-        entry->fileNames[i] = NULL;
-        entry->readingCount[i] = 0;
-        entry->referenceCount[i] = 0;
-        entry->readingLock[i] = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
-        entry->writingLock[i] = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
-        entry->referenceLock[i] = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
-    }
+    entry->fileEntries->fileName = NULL;
+    entry->fileEntries->readingCount = 0;
+    entry->fileEntries->readingLock = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
+    entry->fileEntries->referenceCount = 0;
+    entry->fileEntries->referenceLock = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
+    entry->fileEntries->writingLock = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
 
     return entry;
 }
 
 // private function to free a map entry
 void __freeMapEntry(mapEntry *entry, int maxSize) {
-    for (size_t i = 0; i < maxSize; i++) {
-        free(entry->fileNames[i]);
-        pthread_mutex_destroy(&entry->readingLock[i]);
-        pthread_mutex_destroy(&entry->writingLock[i]);
-        pthread_mutex_destroy(&entry->referenceLock[i]);
-    }
-    pthread_mutex_destroy(&entry->fileNamesLock);
-    free(entry->fileNames);
-    free(entry->readingCount);
-    free(entry->referenceCount);
-    free(entry->readingLock);
-    free(entry->writingLock);
+    free(entry->fileEntries->fileName);
+    free(entry->fileEntries);
     free(entry);
 }
 
@@ -103,7 +85,7 @@ void addUser(map *mp, unsigned char key[]) {
     pthread_mutex_lock(&mp->lock);
 
     // find existing or new index
-    int idx = __getExistingOrNewIndex(mp, key);
+    int idx = __getExistingOrNewEntryIndex(mp, key);
     if (idx == -1) {
         pthread_mutex_unlock(&mp->lock);
         // map is full, and we shouldn't be here...
@@ -132,7 +114,7 @@ void addUser(map *mp, unsigned char key[]) {
 
 void removeUser(map *mp, unsigned char key[]) {
     // find existing index
-    int idx = __getExistingIndex(mp, key);
+    int idx = __getExistingEntryIndex(mp, key);
     if (idx == -1) {
         // key not found
         return;
@@ -173,12 +155,12 @@ void freeMap(map *mp) {
 bool __getExistingOrNewFileNameIndex(mapEntry* me, char *fileName, int maxSize) {
     int idx = -1;
     for (size_t i = 0; i < maxSize; i++) {
-        if (me->fileNames[i] == NULL) {
+        if (me->fileEntries[i].fileName == NULL) {
             if (idx == -1)
                 idx = i;
-            break;
+            continue;
         }
-        if (strcmp(me->fileNames[i], fileName) == 0) {
+        if (strcmp(me->fileEntries[i].fileName, fileName) == 0) {
             idx = i;
             return idx;
         }
@@ -188,37 +170,40 @@ bool __getExistingOrNewFileNameIndex(mapEntry* me, char *fileName, int maxSize) 
 
 bool __getExistingFileNameIndex(mapEntry* me, char *fileName, int maxSize) {
     for (size_t i = 0; i < maxSize; i++) {
-        if (me->fileNames[i] != NULL && strcmp(me->fileNames[i], fileName) == 0) {
+        if (me->fileEntries[i].fileName != NULL && strcmp(me->fileEntries[i].fileName, fileName) == 0) {
             return i;
         }
     }
     return -1;
 }
 
-void __incrementReferenceCount(mapEntry* me, int fileIdx) {
-    pthread_mutex_lock(&me->referenceLock[fileIdx]);
-    me->referenceCount[fileIdx]++;
-    pthread_mutex_unlock(&me->referenceLock[fileIdx]);
+void __incrementReferenceCount(fileEntry* fe) {
+    pthread_mutex_lock(&fe->referenceLock);
+    fe->referenceCount++;
+    pthread_mutex_unlock(&fe->referenceLock);
 }
 
-void __decrementReferenceCount(mapEntry* me, int fileIdx) {
-    pthread_mutex_lock(&me->referenceLock[fileIdx]);
-    me->referenceCount[fileIdx]--;
-    pthread_mutex_unlock(&me->referenceLock[fileIdx]);
-}
+// void __decrementReferenceCount(fileEntry* fe) {
+//     pthread_mutex_lock(&fe->referenceLock);
+//     fe->referenceCount--;
+//     pthread_mutex_unlock(&fe->referenceLock);
+// }
 
 void __removeFileName(mapEntry* me, int fileIdx) {
-    pthread_mutex_lock(&me->fileNamesLock);
-    free(me->fileNames[fileIdx]);
-    me->fileNames[fileIdx] = NULL;
-    me->referenceCount[fileIdx] = 0;
-    me->readingCount[fileIdx] = 0;
-    pthread_mutex_unlock(&me->fileNamesLock);
+    pthread_mutex_lock(&me->fileEntriesLock);
+    fileEntry* fe = &(me->fileEntries[fileIdx]);
+
+    free(fe->fileName);
+    fe->fileName = NULL;
+    fe->referenceCount = 0;
+    fe->readingCount = 0;
+
+    pthread_mutex_unlock(&me->fileEntriesLock);
 }
 
 void startRead(map* mp, unsigned char key[], char* fileName) {
     // find existing
-    int idx = __getExistingOrNewIndex(mp, key);
+    int idx = __getExistingOrNewEntryIndex(mp, key);
     if (idx == -1) {
         puts("startRead: idx == -1\n");
         return; // we shouldn't be here
@@ -233,40 +218,43 @@ void startRead(map* mp, unsigned char key[], char* fileName) {
 
     mapEntry* me = mp->values[idx];
 
-    pthread_mutex_lock(&me->fileNamesLock);
+    pthread_mutex_lock(&me->fileEntriesLock);
 
     // find existing or new index for file name
-    int fileIdx = __getExistingOrNewFileNameIndex(me, key, mp->maxSize);
+    int fileIdx = __getExistingOrNewFileNameIndex(me, fileName, mp->maxSize);
 
     if (fileIdx == -1) {
         puts("fileIdx == -1\n");
-        pthread_mutex_unlock(&me->fileNamesLock);
+        pthread_mutex_unlock(&me->fileEntriesLock);
         return; // we really shouldn't be here...
     }
 
+    fileEntry* fe = &(me->fileEntries[fileIdx]);
+
     // set file name if it's not set
-    if (me->fileNames[fileIdx] == NULL) {
-        me->fileNames[fileIdx] = (char *)malloc(strlen(fileName));
-        strcpy(me->fileNames[fileIdx], fileName);
+    if (fe->fileName == NULL) {
+        fe->fileName = (char *)malloc(strlen(fileName));
+        strcpy(fe->fileName, fileName);
     }
 
-    __incrementReferenceCount(me, fileIdx);
+    __incrementReferenceCount(fe);
 
-    pthread_mutex_unlock(&me->fileNamesLock);
+    pthread_mutex_unlock(&me->fileEntriesLock);
 
     // main logic
-    pthread_mutex_lock(&me->readingLock[fileIdx]);
-    if (me->readingCount[fileIdx] == 0) {
-        pthread_mutex_lock(&me->writingLock[fileIdx]);
+    pthread_mutex_lock(&fe->readingLock);
+    if (fe->readingCount == 0) {
+        pthread_mutex_lock(&fe->writingLock);
+
     }
-    me->readingCount[fileIdx]++;
-    printf("readcount %d\n",me->readingCount[fileIdx]);
-    pthread_mutex_unlock(&me->readingLock[fileIdx]);
+    fe->readingCount++;
+    printf("readcount %d\n",fe->readingCount);
+    pthread_mutex_unlock(&fe->readingLock);
 }
 
 void stopRead(map* mp, unsigned char key[], char* fileName) {
     // find existing
-    int idx = __getExistingIndex(mp, key);
+    int idx = __getExistingEntryIndex(mp, key);
     if (idx == -1) {
         puts("stopRead: idx == -1\n");
         return; // we shouldn't be here
@@ -275,27 +263,36 @@ void stopRead(map* mp, unsigned char key[], char* fileName) {
     mapEntry* me = mp->values[idx];
 
     // find existing or new index for file name
-    int fileIdx = __getExistingFileNameIndex(me, key, mp->maxSize);
+    int fileIdx = __getExistingFileNameIndex(me, fileName, mp->maxSize);
 
     if (fileIdx == -1) {
+        puts("stopRead: fileIdx = -1\n");
         return; // we really shouldn't be here...
     }
 
-    pthread_mutex_lock(&me->readingLock[fileIdx]);
-    me->readingCount[fileIdx]--;
-    __decrementReferenceCount(me, fileIdx);
-    if (me->readingCount[fileIdx] == 0) {
-        if (me->referenceCount[fileIdx] == 0) {
+    fileEntry* fe = &(me->fileEntries[fileIdx]);
+
+    pthread_mutex_lock(&fe->readingLock);
+    fe->readingCount--;
+
+    pthread_mutex_lock(&fe->referenceLock);
+    fe->referenceCount--;
+
+    //__decrementReferenceCount(fe);
+    if (fe->readingCount == 0) {
+        if (fe->referenceCount == 0) {
             __removeFileName(me, fileIdx);
         } 
-        pthread_mutex_unlock(&me->writingLock[fileIdx]);
+        pthread_mutex_unlock(&fe->writingLock);
     }
-    pthread_mutex_unlock(&me->readingLock[fileIdx]);
+    pthread_mutex_unlock(&fe->referenceLock);
+
+    pthread_mutex_unlock(&fe->readingLock);
 }
 
 void startWrite(map* mp, unsigned char key[], char* fileName) {
     // find existing
-    int idx = __getExistingOrNewIndex(mp, key);
+    int idx = __getExistingOrNewEntryIndex(mp, key);
     if (idx == -1) {
         puts("startWrite: idx == -1\n");
         return; // we shouldn't be here
@@ -310,33 +307,35 @@ void startWrite(map* mp, unsigned char key[], char* fileName) {
 
     mapEntry* me = mp->values[idx];
 
-    pthread_mutex_lock(&me->fileNamesLock);
+    pthread_mutex_lock(&me->fileEntriesLock);
 
     // find existing or new index for file name
-    int fileIdx = __getExistingOrNewFileNameIndex(me, key, mp->maxSize);
+    int fileIdx = __getExistingOrNewFileNameIndex(me, fileName, mp->maxSize);
 
     if (fileIdx == -1) {
-        pthread_mutex_unlock(&me->fileNamesLock);
+        puts("startWrite: fileIdx == -1\n");
+        pthread_mutex_unlock(&me->fileEntriesLock);
         return; // we really shouldn't be here...
     }
 
+    fileEntry* fe = &(me->fileEntries[fileIdx]);
+
     // set file name if it's not set
-    if (me->fileNames[fileIdx] == NULL) {
-        me->fileNames[fileIdx] = (char *)malloc(strlen(fileName));
-        strcpy(me->fileNames[fileIdx], fileName);
+    if (fe->fileName == NULL) {
+        fe->fileName = (char *)malloc(strlen(fileName));
+        strcpy(fe->fileName, fileName);
     }
 
-    __incrementReferenceCount(me, fileIdx);
+    __incrementReferenceCount(fe);
 
-    pthread_mutex_unlock(&me->fileNamesLock);
+    pthread_mutex_unlock(&me->fileEntriesLock);
 
-    // pthread_mutex_lock(&me->readingLock[fileIdx]);
-    pthread_mutex_lock(&me->writingLock[fileIdx]);
+    pthread_mutex_lock(&fe->writingLock);
 }
 
 void stopWrite(map* mp, unsigned char key[], char* fileName) {
     // find existing
-    int idx = __getExistingIndex(mp, key);
+    int idx = __getExistingEntryIndex(mp, key);
     if (idx == -1) {
         puts("stopWrite: idx == -1\n");
         return; // we shouldn't be here
@@ -345,17 +344,25 @@ void stopWrite(map* mp, unsigned char key[], char* fileName) {
     mapEntry* me = mp->values[idx];
 
     // find existing or new index for file name
-    int fileIdx = __getExistingFileNameIndex(me, key, mp->maxSize);
+    int fileIdx = __getExistingFileNameIndex(me, fileName, mp->maxSize);
 
     if (fileIdx == -1) {
+        puts("stopWrite: fileIdx == -1\n");
         return; // we really shouldn't be here...
     }
 
-    __decrementReferenceCount(me, fileIdx);
-    if (me->referenceCount[fileIdx] == 0) {
+    fileEntry* fe = &(me->fileEntries[fileIdx]);
+
+    //__decrementReferenceCount(fe);
+    pthread_mutex_lock(&fe->referenceLock);
+    
+    fe->referenceCount--;
+
+    if (fe->referenceCount == 0) {
         __removeFileName(me, fileIdx);
     }
+    
+    pthread_mutex_unlock(&fe->referenceLock);
 
-    pthread_mutex_unlock(&me->writingLock[fileIdx]);
-    // pthread_mutex_unlock(&me->readingLock[fileIdx]);
+    pthread_mutex_unlock(&fe->writingLock);
 }

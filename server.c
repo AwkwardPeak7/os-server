@@ -137,7 +137,7 @@ void *serveClient(void *args) {
 				if (json_response != NULL) {
 					const cJSON *success_item = cJSON_GetObjectItem(json_response, "success");
 					if (cJSON_IsBool(success_item) && cJSON_IsTrue(success_item)) {
-						sleep(10);
+						sleep(10); // TODO: remove
 						sendFile(userDir, filename, arg->client_socket);
 					}
 					cJSON_Delete(json_response);
