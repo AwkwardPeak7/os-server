@@ -102,11 +102,11 @@ void *serveClient(void *args) {
 
 			// TODO: optimize this
 			const unsigned int userDirSize = getDirectorySize(userDir);
-			if (userDirSize + filesize > arg->dataLimit) {
-				const char success[] = "{\"success\": false}";
-				send(arg->client_socket, success, sizeof(success), 0);
-				continue;
-			}
+			// if (userDirSize + filesize > arg->dataLimit) {
+			// 	const char success[] = "{\"success\": false}";
+			// 	send(arg->client_socket, success, sizeof(success), 0);
+			// 	continue;
+			// }
 
 			const char success[] = "{\"success\": true}";
 			send(arg->client_socket, success, sizeof(success), 0);
@@ -137,6 +137,7 @@ void *serveClient(void *args) {
 				if (json_response != NULL) {
 					const cJSON *success_item = cJSON_GetObjectItem(json_response, "success");
 					if (cJSON_IsBool(success_item) && cJSON_IsTrue(success_item)) {
+						sleep(10);
 						sendFile(userDir, filename, arg->client_socket);
 					}
 					cJSON_Delete(json_response);

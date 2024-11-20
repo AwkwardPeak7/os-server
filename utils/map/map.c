@@ -1,6 +1,8 @@
 #include "map.h"
 #include <stdlib.h>
 #include <string.h> 
+#include <stdio.h>
+#include <unistd.h>
 
 #define shaLength 32
 
@@ -216,9 +218,17 @@ void __removeFileName(mapEntry* me, int fileIdx) {
 
 void startRead(map* mp, unsigned char key[], char* fileName) {
     // find existing
-    int idx = __getExistingIndex(mp, key);
+    int idx = __getExistingOrNewIndex(mp, key);
     if (idx == -1) {
+        puts("startRead: idx == -1\n");
         return; // we shouldn't be here
+    }
+
+    if (mp->values[idx] == NULL) {
+        printf("startRead: allocate new map entry at %d\n", idx);
+        mp->values[idx] = __createMapEntry(mp->maxSize);
+        mp->keys[idx] = (char*)malloc(strlen(key));
+        strcpy(mp->keys[idx], key);
     }
 
     mapEntry* me = mp->values[idx];
@@ -229,6 +239,7 @@ void startRead(map* mp, unsigned char key[], char* fileName) {
     int fileIdx = __getExistingOrNewFileNameIndex(me, key, mp->maxSize);
 
     if (fileIdx == -1) {
+        puts("fileIdx == -1\n");
         pthread_mutex_unlock(&me->fileNamesLock);
         return; // we really shouldn't be here...
     }
@@ -245,10 +256,11 @@ void startRead(map* mp, unsigned char key[], char* fileName) {
 
     // main logic
     pthread_mutex_lock(&me->readingLock[fileIdx]);
-    if (me->readingCount == 0) {
+    if (me->readingCount[fileIdx] == 0) {
         pthread_mutex_lock(&me->writingLock[fileIdx]);
     }
-    me->readingCount++;
+    me->readingCount[fileIdx]++;
+    printf("readcount %d\n",me->readingCount[fileIdx]);
     pthread_mutex_unlock(&me->readingLock[fileIdx]);
 }
 
@@ -256,6 +268,7 @@ void stopRead(map* mp, unsigned char key[], char* fileName) {
     // find existing
     int idx = __getExistingIndex(mp, key);
     if (idx == -1) {
+        puts("stopRead: idx == -1\n");
         return; // we shouldn't be here
     }
 
@@ -269,9 +282,9 @@ void stopRead(map* mp, unsigned char key[], char* fileName) {
     }
 
     pthread_mutex_lock(&me->readingLock[fileIdx]);
-    me->readingCount--;
+    me->readingCount[fileIdx]--;
     __decrementReferenceCount(me, fileIdx);
-    if (me->readingCount == 0) {
+    if (me->readingCount[fileIdx] == 0) {
         if (me->referenceCount[fileIdx] == 0) {
             __removeFileName(me, fileIdx);
         } 
@@ -282,9 +295,17 @@ void stopRead(map* mp, unsigned char key[], char* fileName) {
 
 void startWrite(map* mp, unsigned char key[], char* fileName) {
     // find existing
-    int idx = __getExistingIndex(mp, key);
+    int idx = __getExistingOrNewIndex(mp, key);
     if (idx == -1) {
+        puts("startWrite: idx == -1\n");
         return; // we shouldn't be here
+    }
+
+    if (mp->values[idx] == NULL) {
+        printf("startWrite: allocate new map entry at %d\n", idx);
+        mp->values[idx] = __createMapEntry(mp->maxSize);
+        mp->keys[idx] = (char*)malloc(strlen(key));
+        strcpy(mp->keys[idx], key);
     }
 
     mapEntry* me = mp->values[idx];
@@ -309,7 +330,7 @@ void startWrite(map* mp, unsigned char key[], char* fileName) {
 
     pthread_mutex_unlock(&me->fileNamesLock);
 
-    pthread_mutex_lock(&me->readingLock[fileIdx]);
+    // pthread_mutex_lock(&me->readingLock[fileIdx]);
     pthread_mutex_lock(&me->writingLock[fileIdx]);
 }
 
@@ -317,6 +338,7 @@ void stopWrite(map* mp, unsigned char key[], char* fileName) {
     // find existing
     int idx = __getExistingIndex(mp, key);
     if (idx == -1) {
+        puts("stopWrite: idx == -1\n");
         return; // we shouldn't be here
     }
 
@@ -335,5 +357,5 @@ void stopWrite(map* mp, unsigned char key[], char* fileName) {
     }
 
     pthread_mutex_unlock(&me->writingLock[fileIdx]);
-    pthread_mutex_unlock(&me->readingLock[fileIdx]);
+    // pthread_mutex_unlock(&me->readingLock[fileIdx]);
 }
