@@ -16,12 +16,16 @@ transfer: transfer/transfer.c transfer/transfer.h
 	@mkdir -p build/transfer
 	gcc -O3 transfer/transfer.c -o build/transfer/transfer.o -c
 
+arena: arena/arena.c arena/arena.h
+	@mkdir -p build/arena
+	gcc -O3 arena/arena.c -o build/arena/arena.o -c
+
 server: server.c
 	@mkdir -p build
 	gcc -O3 server.c -o build/server.o -D_GNU_SOURCE -c
 
-all: map filesystem config transfer server
-	gcc -O3 build/map/map.o build/filesystem/filesystem.o build/config/config.o build/transfer/transfer.o build/server.o -o build/server -lpthread -lcjson
+all: map filesystem config transfer server arena
+	gcc -O3 build/map/map.o build/filesystem/filesystem.o build/config/config.o build/transfer/transfer.o build/arena/arena.o build/server.o -o build/server -lpthread -lcjson
 
 run:
 	build/server
