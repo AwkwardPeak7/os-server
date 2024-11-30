@@ -6,7 +6,7 @@
 Arena* create_arena(unsigned int _totalThreads)
 {
     Arena* arena = (Arena*)malloc(sizeof(Arena));
-    arena->totalThreads = _totalThreads*20;
+    arena->totalThreads = _totalThreads*2;
 
     // Set bins size in bytes
     arena->bin_sizes[0] = 16;
