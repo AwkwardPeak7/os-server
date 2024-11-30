@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include <pthread.h>
+#include "../arena/arena.h"
 
 typedef struct fileEntry
 {
@@ -24,6 +25,8 @@ typedef struct mapEntry
     pthread_mutex_t fileEntriesLock;
 
     unsigned int userCount;
+
+    Arena* arena;
 } mapEntry;
 
 typedef struct map
@@ -32,9 +35,10 @@ typedef struct map
     char* *keys;
     mapEntry* *values;
     pthread_mutex_t lock;
+    Arena* arena;
 } map;
 
-map* createMap(int maxSize);
+map* createMap(int maxSize, Arena* _arena);
 void freeMap(map* mp);
 
 void addUser(map* mp, unsigned char key[]);

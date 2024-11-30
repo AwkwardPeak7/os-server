@@ -16,9 +16,9 @@ transfer: transfer/transfer.c transfer/transfer.h
 	@mkdir -p build/transfer
 	gcc -O3 transfer/transfer.c -o build/transfer/transfer.o -c
 
-arena: arena/arena.c arena/arena.h
+arena: utils/arena/arena.c utils/arena/arena.h
 	@mkdir -p build/arena
-	gcc -O3 arena/arena.c -o build/arena/arena.o -c
+	gcc -O3 utils/arena/arena.c -o build/arena/arena.o -c
 
 server: server.c
 	@mkdir -p build

@@ -1,4 +1,5 @@
 #include "map.h"
+#include "../arena/arena.h"
 #include <stdlib.h>
 #include <string.h> 
 #include <stdio.h>
@@ -6,26 +7,28 @@
 
 #define shaLength 32
 
-map* createMap(int maxSize) {
+map* createMap(int maxSize, Arena* _arena) {
     // Allocate memory for the map struct
-    map *m = (map *)malloc(sizeof(map));
+    map *m = (map *)custom_malloc(_arena, sizeof(map));
 
 	m->maxSize = maxSize;
 
     m->lock = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
 
-    m->keys = (char **)malloc(maxSize * sizeof(char *));
+    m->keys = (char **)custom_malloc(_arena, maxSize * sizeof(char *));
 
     for (int i = 0; i < maxSize; i++)  {
         m->keys[i] = NULL;
     }
 
     // Allocate memory for values array
-    m->values = (mapEntry **)malloc(maxSize * sizeof(mapEntry*));
+    m->values = (mapEntry **)custom_malloc(_arena, maxSize * sizeof(mapEntry*));
 
     for (size_t i = 0; i < maxSize; i++) {
         m->values[i] = NULL;
     }
+
+    m->arena = _arena;
 
     return m;
 }
@@ -57,12 +60,13 @@ int __getExistingEntryIndex(map *mp, unsigned char key[]) {
 }
 
 // private function to create a map entry
-mapEntry* __createMapEntry(int maxSize) {
-    mapEntry *entry = (mapEntry *)malloc(sizeof(mapEntry));
+mapEntry* __createMapEntry(int maxSize, Arena* _arena) {
+    mapEntry *entry = (mapEntry *)custom_malloc(_arena,sizeof(mapEntry));
 
+    entry->arena = _arena;
     entry->userCount = 0;
     entry->fileEntriesLock = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
-    entry->fileEntries = (fileEntry *)malloc(maxSize * sizeof(fileEntry));
+    entry->fileEntries = (fileEntry *)custom_malloc(_arena, maxSize * sizeof(fileEntry));
 
     entry->fileEntries->fileName = NULL;
     entry->fileEntries->readingCount = 0;
@@ -76,9 +80,9 @@ mapEntry* __createMapEntry(int maxSize) {
 
 // private function to free a map entry
 void __freeMapEntry(mapEntry *entry, int maxSize) {
-    free(entry->fileEntries->fileName);
-    free(entry->fileEntries);
-    free(entry);
+    custom_free(entry->arena,entry->fileEntries->fileName);
+    custom_free(entry->arena, entry->fileEntries);
+    custom_free(entry->arena, entry);
 }
 
 void addUser(map *mp, unsigned char key[]) {
@@ -100,13 +104,13 @@ void addUser(map *mp, unsigned char key[]) {
     }
 
     // if key is not in the map, add it and also malloc for values
-    mp->keys[idx] = (char *)malloc(shaLength);
+    mp->keys[idx] = (char *)custom_malloc( mp->arena, shaLength);
     memcpy(mp->keys[idx], key, shaLength);
     
     // we can unlock now since we have reserved the index
     pthread_mutex_unlock(&mp->lock);
 
-    mp->values[idx] = __createMapEntry(mp->maxSize);
+    mp->values[idx] = __createMapEntry(mp->maxSize, mp->arena);
 
     // increment user count
     mp->values[idx]->userCount++;
@@ -126,7 +130,7 @@ void removeUser(map *mp, unsigned char key[]) {
     // if user count is 0, free the entry
     if (mp->values[idx]->userCount == 0) {
         pthread_mutex_lock(&mp->lock);
-        free(mp->keys[idx]);
+        custom_free(mp->arena, mp->keys[idx]);
         __freeMapEntry(mp->values[idx], mp->maxSize);
         mp->keys[idx] = NULL;
         mp->values[idx] = NULL;
@@ -138,16 +142,16 @@ void freeMap(map *mp) {
     if (mp) {
         for (int i = 0; i < mp->maxSize; i++) {
             if (mp->keys[i] != NULL) {
-                free(mp->keys[i]);
+                custom_free(mp->arena,mp->keys[i]);
             }
 
             if (mp->values[i] != NULL) {
                 __freeMapEntry(mp->values[i], mp->maxSize);
             }
         }
-        free(mp->keys);
-        free(mp->values);
-        free(mp);
+        custom_free(mp->arena, mp->keys);
+        custom_free(mp->arena, mp->values);
+        custom_free(mp->arena, mp);
     }
 }
 
@@ -193,7 +197,7 @@ void __removeFileName(mapEntry* me, int fileIdx) {
     pthread_mutex_lock(&me->fileEntriesLock);
     fileEntry* fe = &(me->fileEntries[fileIdx]);
 
-    free(fe->fileName);
+    custom_free(me->arena, fe->fileName);
     fe->fileName = NULL;
     fe->referenceCount = 0;
     fe->readingCount = 0;
@@ -211,8 +215,8 @@ void startRead(map* mp, unsigned char key[], char* fileName) {
 
     if (mp->values[idx] == NULL) {
         printf("startRead: allocate new map entry at %d\n", idx);
-        mp->values[idx] = __createMapEntry(mp->maxSize);
-        mp->keys[idx] = (char*)malloc(strlen(key));
+        mp->values[idx] = __createMapEntry(mp->maxSize, mp->arena);
+        mp->keys[idx] = (char*)custom_malloc(mp->arena,strlen(key));
         strcpy(mp->keys[idx], key);
     }
 
@@ -233,7 +237,7 @@ void startRead(map* mp, unsigned char key[], char* fileName) {
 
     // set file name if it's not set
     if (fe->fileName == NULL) {
-        fe->fileName = (char *)malloc(strlen(fileName));
+        fe->fileName = (char *)custom_malloc(mp->arena, strlen(fileName));
         strcpy(fe->fileName, fileName);
     }
 
@@ -300,8 +304,8 @@ void startWrite(map* mp, unsigned char key[], char* fileName) {
 
     if (mp->values[idx] == NULL) {
         printf("startWrite: allocate new map entry at %d\n", idx);
-        mp->values[idx] = __createMapEntry(mp->maxSize);
-        mp->keys[idx] = (char*)malloc(strlen(key));
+        mp->values[idx] = __createMapEntry(mp->maxSize, mp->arena);
+        mp->keys[idx] = (char*)custom_malloc(mp->arena, strlen(key));
         strcpy(mp->keys[idx], key);
     }
 
@@ -322,7 +326,7 @@ void startWrite(map* mp, unsigned char key[], char* fileName) {
 
     // set file name if it's not set
     if (fe->fileName == NULL) {
-        fe->fileName = (char *)malloc(strlen(fileName));
+        fe->fileName = (char *)custom_malloc(mp->arena, strlen(fileName));
         strcpy(fe->fileName, fileName);
     }
 

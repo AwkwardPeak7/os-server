@@ -15,6 +15,7 @@
 #include "utils/config/config.h"
 #include "utils/map/map.h"
 #include "transfer/transfer.h"
+#include "utils/arena/arena.h"
 
 map* user_sync_map = NULL;
 
@@ -207,6 +208,7 @@ int main() {
 	puts("bind done");
 
 	const int threads = cJSON_GetObjectItem(config, "threads")->valueint;
+	Arena* myArena = create_arena(threads);
 	listen(server_socket, threads);
 
 	int c = sizeof(struct sockaddr_in);
@@ -226,7 +228,7 @@ int main() {
 		args[i].dataLimit = cJSON_GetObjectItem(config, "dataLimit")->valueint;
 	}
 
-	user_sync_map = createMap(threads);
+	user_sync_map = createMap(threads, myArena);
 
 	cJSON_Delete(config);
 
