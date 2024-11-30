@@ -6,7 +6,8 @@
 Arena* create_arena(unsigned int _totalThreads)
 {
     Arena* arena = (Arena*)malloc(sizeof(Arena));
-    arena->totalThreads = _totalThreads*2;
+    arena->totalThreads = _totalThreads;//*2;
+    arena->extraEnabled = false;
 
     // Set bins size in bytes
     arena->bin_sizes[0] = 16;
@@ -21,6 +22,8 @@ Arena* create_arena(unsigned int _totalThreads)
         arena->binsArray[i] = malloc(arena->bin_sizes[i] * arena->totalThreads);
         arena->mutexes[i] = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
     }
+
+    arena->extraMutex = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
 
     return arena;
 }
@@ -67,6 +70,29 @@ void* custom_malloc(Arena* arena, size_t size)
 
     if(bin == -1)
     {
+        if(arena->extraEnabled == false)
+        {
+            pthread_mutex_lock(&arena->extraMutex);
+            if(arena->extraEnabled == false)
+            {
+                allocate_extra_bin(arena);
+                arena->extraEnabled = true;
+            }
+            pthread_mutex_unlock(&arena->extraMutex);
+        }
+
+        pthread_mutex_lock(&arena->extraMutex);
+        for (int i = 0; i < arena->totalThreads; i++) 
+        {
+            if (arena->extraMemory[i]) 
+            {
+            arena->extraMemory[i] = false;
+            pthread_mutex_unlock(&arena->extraMutex);
+            return (char*)arena->extraMemory + (128 * i);
+            }
+        }
+        pthread_mutex_unlock(&arena->extraMutex);
+
         printf("Insufficient memory. Requested size: %zu bytes\n", size);
         return NULL;
     }
@@ -112,4 +138,26 @@ void custom_free(Arena* arena, void* ptr)
             break;
         }
     }
+
+    if(arena->extraEnabled)
+    {
+        for (int i = 0; i < arena->totalThreads; i++) 
+        {
+            if (ptr == (char*)arena->extraMemory + (128 * i)) 
+            {
+                pthread_mutex_lock(&arena->extraMutex);
+                arena->extraMemory[i] = true;
+                pthread_mutex_unlock(&arena->extraMutex);
+                break;
+            }
+        }
+    }
+}
+
+void allocate_extra_bin(Arena* arena)
+{
+    printf("Allocating extra memory bin\n");
+    arena->extraBin = malloc(arena->totalThreads * sizeof(bool));
+    memset(arena->extraBin, 1, arena->totalThreads * sizeof(bool));
+    arena->extraMemory = malloc(128 * arena->totalThreads);
 }
