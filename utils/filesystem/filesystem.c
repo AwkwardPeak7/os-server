@@ -28,8 +28,8 @@ bool directoryExists(const char *path) {
 	return stat(path, &st) == 0 && S_ISDIR(st.st_mode);
 }
 
-unsigned int getDirectorySize(const char *path) {
-	unsigned int size = 0;
+long getDirectorySize(const char *path) {
+	long size = 0;
 	DIR *dir = opendir(path);
 	struct dirent *entry;
 	struct stat st;

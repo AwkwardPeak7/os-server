@@ -101,10 +101,11 @@ void *serveClient(void *args) {
 			startWrite(user_sync_map, (unsigned char*)userDir, (char*)filename);
 
 			// TODO: optimize this
-			const unsigned int userDirSize = getDirectorySize(userDir);
+			// const long userDirSize = getDirectorySize(userDir);
 			// if (userDirSize + filesize > arg->dataLimit) {
 			// 	const char success[] = "{\"success\": false}";
 			// 	send(arg->client_socket, success, sizeof(success), 0);
+			// 	stopWrite(user_sync_map, (unsigned char*)userDir, (char*)filename);
 			// 	continue;
 			// }
 
