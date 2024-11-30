@@ -14,6 +14,11 @@ typedef struct {
     bool* free_bins_map[BINS];
     void* binsArray[BINS];
     pthread_mutex_t mutexes[BINS];
+    pthread_mutex_t extraMutex;
+
+    bool* extraMemory;
+    void* extraBin;
+    bool extraEnabled;
 } Arena;
 
 Arena* create_arena(unsigned int totalThreads);
@@ -23,6 +28,7 @@ void* custom_malloc(Arena* arena, size_t size);
 void custom_free(Arena* arena, void* ptr);
 void print_bool_pool(Arena* arena);
 
+void allocate_extra_bin(Arena* arena);
 bool is_bin_full(Arena* arena, int bin);
 
 #endif // ARENA_H
